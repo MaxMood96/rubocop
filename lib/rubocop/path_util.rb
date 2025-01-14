@@ -32,19 +32,22 @@ module RuboCop
     private_constant :SMART_PATH_CACHE
 
     def smart_path(path)
-      SMART_PATH_CACHE[path] ||= begin
-        # Ideally, we calculate this relative to the project root.
-        base_dir = Dir.pwd
-
-        if path.start_with? base_dir
-          relative_path(path, base_dir)
+      SMART_PATH_CACHE[path] ||=
+        if path.is_a?(RemoteConfig)
+          path.uri.to_s
         else
-          path
+          # Ideally, we calculate this relative to the project root.
+          base_dir = Dir.pwd
+
+          if path.start_with? base_dir
+            relative_path(path, base_dir)
+          else
+            path
+          end
         end
-      end
     end
 
-    # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity
+    # rubocop:disable Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     def match_path?(pattern, path)
       case pattern
       when String
@@ -52,6 +55,10 @@ module RuboCop
           if pattern == path
             true
           elsif glob?(pattern)
+            # File name matching doesn't really work with relative patterns that start with "..". We
+            # get around that problem by converting the pattern to an absolute path.
+            pattern = File.expand_path(pattern) if pattern.start_with?('..')
+
             File.fnmatch?(pattern, path, File::FNM_PATHNAME | File::FNM_EXTGLOB)
           end
 
@@ -66,7 +73,7 @@ module RuboCop
         end
       end
     end
-    # rubocop:enable Metrics/MethodLength, Metrics/CyclomaticComplexity
+    # rubocop:enable Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
     # Returns true for an absolute Unix or Windows path.
     def absolute?(path)

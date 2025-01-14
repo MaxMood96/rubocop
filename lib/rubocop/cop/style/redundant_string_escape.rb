@@ -36,7 +36,6 @@ module RuboCop
       #   STR
       class RedundantStringEscape < Base
         include MatchRange
-        include RangeHelp
         extend AutoCorrector
 
         MSG = 'Redundant escape of %<char>s inside string literal.'
@@ -64,10 +63,10 @@ module RuboCop
         def str_contents_range(node)
           if heredoc?(node)
             node.loc.heredoc_body
+          elsif node.str_type?
+            node.source_range
           elsif begin_loc_present?(node)
             contents_range(node)
-          else
-            node.loc.expression
           end
         end
 
@@ -134,12 +133,12 @@ module RuboCop
         end
 
         def percent_array_literal?(node)
-          (percent_w_literal?(node) || percent_w_upper_literal?(node))
+          percent_w_literal?(node) || percent_w_upper_literal?(node)
         end
 
         def heredoc_with_disabled_interpolation?(node)
           if heredoc?(node)
-            node.loc.expression.source.end_with?("'")
+            node.source.end_with?("'")
           elsif node.parent&.dstr_type?
             heredoc_with_disabled_interpolation?(node.parent)
           else
@@ -157,6 +156,8 @@ module RuboCop
           if literal_in_interpolated_or_multiline_string?(node) || percent_array_literal?(node)
             return delimiter?(node.parent, char)
           end
+
+          return true unless node.loc.begin
 
           delimiters = [node.loc.begin.source[-1], node.loc.end.source[0]]
 

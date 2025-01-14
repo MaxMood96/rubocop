@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'digest/sha1'
-require 'etc'
 require 'find'
 require 'zlib'
 require_relative 'cache_config'
@@ -83,10 +82,10 @@ module RuboCop
       config_store.for_pwd.for_all_cops['AllowSymlinksInCacheRootDirectory']
     end
 
-    attr :path
+    attr_reader :path
 
     def initialize(file, team, options, config_store, cache_root = nil)
-      cache_root ||= options[:cache_root]
+      cache_root ||= File.join(options[:cache_root], 'rubocop_cache') if options[:cache_root]
       cache_root ||= ResultCache.cache_root(config_store)
       @allow_symlinks_in_cache_location =
         ResultCache.allow_symlinks_in_cache_location?(config_store)
@@ -202,6 +201,10 @@ module RuboCop
       lib_root = File.join(File.dirname(__FILE__), '..')
       exe_root = File.join(lib_root, '..', 'exe')
 
+      # Make sure to use an absolute path to prevent errors on Windows
+      # when traversing the relative paths with symlinks.
+      exe_root = File.absolute_path(exe_root)
+
       # These are all the files we have `require`d plus everything in the
       # exe directory. A change to any of them could affect the cop output
       # so we include them in the cache hash.
@@ -219,19 +222,13 @@ module RuboCop
       options.to_s.gsub(/[^a-z]+/i, '_')
     end
 
-    # The external dependency checksums are cached per RuboCop team so that
-    # the checksums don't need to be recomputed for each file.
-    def team_checksum(team)
-      @checksum_by_team ||= {}.compare_by_identity
-      @checksum_by_team[team] ||= team.external_dependency_checksum
-    end
-
     # We combine team and options into a single "context" checksum to avoid
     # making file names that are too long for some filesystems to handle.
     # This context is for anything that's not (1) the RuboCop executable
     # checksum or (2) the inspected file checksum.
     def context_checksum(team, options)
-      Digest::SHA1.hexdigest([team_checksum(team), relevant_options_digest(options)].join)
+      keys = [team.external_dependency_checksum, relevant_options_digest(options)]
+      Digest::SHA1.hexdigest(keys.join)
     end
   end
 end

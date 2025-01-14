@@ -16,7 +16,7 @@ module RuboCop
           return unless node
 
           @processed_source = processed_source
-          expr = node.respond_to?(:loc) ? node.loc.expression : node
+          expr = node.respond_to?(:loc) ? node.source_range : node
           return if block_comment_within?(expr)
 
           taboo_ranges = inside_string_ranges(node)
@@ -47,14 +47,14 @@ module RuboCop
           if column_delta.positive? && range.resize(1).source != "\n"
             corrector.insert_before(range, ' ' * column_delta)
           elsif /\A[ \t]+\z/.match?(range.source)
-            remove(range, corrector)
+            corrector.remove(range)
           end
         end
 
         def inside_string_ranges(node)
           return [] unless node.is_a?(Parser::AST::Node)
 
-          node.each_node(:str, :dstr, :xstr).map { |n| inside_string_range(n) }.compact
+          node.each_node(:str, :dstr, :xstr).filter_map { |n| inside_string_range(n) }
         end
 
         def inside_string_range(node)
@@ -80,7 +80,7 @@ module RuboCop
 
         def block_comment_within?(expr)
           processed_source.comments.select(&:document?).any? do |c|
-            within?(c.loc.expression, expr)
+            within?(c.source_range, expr)
           end
         end
 
@@ -94,17 +94,6 @@ module RuboCop
           else
             range_between(line_begin_pos - column_delta.abs, line_begin_pos)
           end
-        end
-
-        def remove(range, corrector)
-          original_stderr = $stderr
-          $stderr = StringIO.new # Avoid error messages on console
-          corrector.remove(range)
-        rescue RuntimeError
-          range = range_between(range.begin_pos + 1, range.end_pos + 1)
-          retry if /^ +$/.match?(range.source)
-        ensure
-          $stderr = original_stderr
         end
 
         def each_line(expr)

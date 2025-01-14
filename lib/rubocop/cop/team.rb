@@ -9,11 +9,17 @@ module RuboCop
     # For performance reasons, Team will first dispatch cops & forces in two groups,
     # first the ones needed for autocorrection (if any), then the rest
     # (unless autocorrections happened).
+    # rubocop:disable Metrics/ClassLength
     class Team
       # @return [Team]
       def self.new(cop_or_classes, config, options = {})
         # Support v0 api:
-        return mobilize(cop_or_classes, config, options) if cop_or_classes.first.is_a?(Class)
+        if cop_or_classes.first.is_a?(Class)
+          warn Rainbow(<<~WARNING).yellow, uplevel: 1
+            `Team.new` with cop classes is deprecated. Use `Team.mobilize` instead.
+          WARNING
+          return mobilize(cop_or_classes, config, options)
+        end
 
         super
       end
@@ -74,6 +80,10 @@ module RuboCop
       # @deprecated. Use investigate
       # @return Array<offenses>
       def inspect_file(processed_source)
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          `inspect_file` is deprecated. Use `investigate` instead.
+        WARNING
+
         investigate(processed_source).offenses
       end
 
@@ -108,12 +118,20 @@ module RuboCop
 
       # @deprecated
       def forces
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          `forces` is deprecated.
+        WARNING
+
         @forces ||= self.class.forces_for(cops)
       end
 
       def external_dependency_checksum
-        keys = cops.map(&:external_dependency_checksum).compact
-        Digest::SHA1.hexdigest(keys.join)
+        # The external dependency checksums are cached per RuboCop team so that
+        # the checksums don't need to be recomputed for each file.
+        @external_dependency_checksum ||= begin
+          keys = cops.filter_map(&:external_dependency_checksum)
+          Digest::SHA1.hexdigest(keys.join)
+        end
       end
 
       private
@@ -160,8 +178,8 @@ module RuboCop
       def roundup_relevant_cops(processed_source)
         cops.select do |cop|
           next true if processed_source.comment_config.cop_opted_in?(cop)
-          next false unless @registry.enabled?(cop, @config)
           next false if cop.excluded_file?(processed_source.file_path)
+          next false unless @registry.enabled?(cop, @config)
 
           support_target_ruby_version?(cop) && support_target_rails_version?(cop)
         end
@@ -174,6 +192,9 @@ module RuboCop
       end
 
       def support_target_rails_version?(cop)
+        # In this case, the rails version was already checked by `#excluded_file?`
+        return true if defined?(RuboCop::Rails::TargetRailsVersion::USES_REQUIRES_GEM_API)
+
         return true unless cop.class.respond_to?(:support_target_rails_version?)
 
         cop.class.support_target_rails_version?(cop.target_rails_version)
@@ -237,6 +258,8 @@ module RuboCop
 
           if cause.is_a?(Warning)
             handle_warning(cause, location)
+          elsif cause.is_a?(Force::HookError)
+            handle_error(cause.cause, location, cause.joining_cop)
           else
             handle_error(cause, location, error.cop)
           end
@@ -262,5 +285,6 @@ module RuboCop
         end
       end
     end
+    # rubocop:enable Metrics/ClassLength
   end
 end

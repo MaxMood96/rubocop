@@ -4,8 +4,6 @@ module RuboCop
   module Cop
     # Representation of an annotation comment in source code (eg. `# TODO: blah blah blah`).
     class AnnotationComment
-      extend Forwardable
-
       attr_reader :comment, :margin, :keyword, :colon, :space, :note
 
       # @param [Parser::Source::Comment] comment
@@ -29,7 +27,7 @@ module RuboCop
 
       # Returns the range bounds for just the annotation
       def bounds
-        start = comment.loc.expression.begin_pos + margin.length
+        start = comment.source_range.begin_pos + margin.length
         length = [keyword, colon, space].reduce(0) { |len, elem| len + elem.to_s.length }
         [start, start + length]
       end

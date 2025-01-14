@@ -127,11 +127,57 @@ RSpec.describe RuboCop::Cop::Style::AccessorGrouping, :config do
     it 'does not register an offense for accessors with other methods' do
       expect_no_offenses(<<~RUBY)
         class Foo
+          extend T::Sig
+
           annotation_method :one
           attr_reader :one
 
           annotation_method :two
           attr_reader :two
+
+          sig { returns(Integer) }
+          attr_reader :three
+        end
+      RUBY
+    end
+
+    it 'does not register an offense for grouped accessors below a typechecked accessor method' do
+      expect_no_offenses(<<~RUBY)
+        class Foo
+          extend T::Sig
+
+          sig { returns(Integer) }
+          attr_reader :one
+
+          attr_reader :two, :three
+        end
+      RUBY
+    end
+
+    it 'registers an offense for grouped accessors distinct from a typechecked accessor method' do
+      expect_offense(<<~RUBY)
+        class Foo
+          extend T::Sig
+
+          sig { returns(Integer) }
+          attr_reader :one
+
+          attr_reader :two, :three
+          ^^^^^^^^^^^^^^^^^^^^^^^^ Group together all `attr_reader` attributes.
+
+          attr_reader :four
+          ^^^^^^^^^^^^^^^^^ Group together all `attr_reader` attributes.
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        class Foo
+          extend T::Sig
+
+          sig { returns(Integer) }
+          attr_reader :one
+
+          attr_reader :two, :three, :four
         end
       RUBY
     end
@@ -215,6 +261,33 @@ RSpec.describe RuboCop::Cop::Style::AccessorGrouping, :config do
       expect_no_offenses(<<~RUBY)
         class Foo
           attr_reader :one, :one
+        end
+      RUBY
+    end
+
+    it 'does not register an offense for grouped accessors having RBS::Inline annotation' do
+      expect_no_offenses(<<~RUBY)
+        class Foo
+          attr_reader :one #: String
+
+          attr_reader :two, :three
+        end
+      RUBY
+    end
+
+    it 'registers an offense for grouped accessors having non-RBS::Inline annotation' do
+      expect_offense(<<~RUBY)
+        class Foo
+          attr_reader :one # comment #: String
+          ^^^^^^^^^^^^^^^^ Group together all `attr_reader` attributes.
+          attr_reader :two, :three
+          ^^^^^^^^^^^^^^^^^^^^^^^^ Group together all `attr_reader` attributes.
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        class Foo
+          attr_reader :one, :two, :three # comment #: String
         end
       RUBY
     end
@@ -362,6 +435,26 @@ RSpec.describe RuboCop::Cop::Style::AccessorGrouping, :config do
           attr_reader :one
           attr_reader :two
         attr_reader :one
+        end
+      RUBY
+    end
+
+    it 'registers an offense and corrects when other method is followed by a space and grouped accessors' do
+      expect_offense(<<~RUBY)
+        class Foo
+          other_macro :zoo, :woo
+
+          attr_reader :foo, :bar
+          ^^^^^^^^^^^^^^^^^^^^^^ Use one attribute per `attr_reader`.
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        class Foo
+          other_macro :zoo, :woo
+
+          attr_reader :foo
+          attr_reader :bar
         end
       RUBY
     end

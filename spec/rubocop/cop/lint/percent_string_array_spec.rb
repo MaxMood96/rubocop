@@ -65,13 +65,13 @@ RSpec.describe RuboCop::Cop::Lint::PercentStringArray, :config do
   end
 
   context 'with invalid byte sequence in UTF-8' do
-    it 'add an offense and corrects when tokens contain quotes' do
-      expect_offense(<<-RUBY)
+    it 'adds an offense and corrects when tokens contain quotes' do
+      expect_offense(<<~RUBY)
         %W("a\\255\\255")
         ^^^^^^^^^^^^^^^ Within `%w`/`%W`, quotes and ',' are unnecessary and may be unwanted in the resulting strings.
       RUBY
 
-      expect_correction(<<-RUBY)
+      expect_correction(<<~RUBY)
         %W(a\\255\\255)
       RUBY
     end
@@ -82,7 +82,8 @@ RSpec.describe RuboCop::Cop::Lint::PercentStringArray, :config do
   end
 
   context 'with binary encoded source' do
-    it 'adds an offense and corrects when tokens contain quotes' do
+    # FIXME: This spec should work with the latest Prism and Ruby 3.4.0dev.
+    it 'adds an offense and corrects when tokens contain quotes', broken_on: :prism do
       expect_offense(<<~RUBY.b)
         # encoding: BINARY
 
@@ -97,7 +98,8 @@ RSpec.describe RuboCop::Cop::Lint::PercentStringArray, :config do
       RUBY
     end
 
-    it 'accepts if tokens contain no quotes' do
+    # FIXME: This spec should work with the latest Prism and Ruby 3.4.0dev.
+    it 'accepts if tokens contain no quotes', broken_on: :prism do
       expect_no_offenses(<<~RUBY.b)
         # encoding: BINARY
 

@@ -14,8 +14,14 @@ module RuboCop
       #
       #   # good
       #   def foo(x, y = 1)
+      #     # Alternatives to `__callee__` are `__method__` and `:foo`.
       #     return to_enum(__callee__, x, y)
-      #     # alternatives to `__callee__` are `__method__` and `:foo`
+      #   end
+      #
+      #   # good
+      #   def foo(x, y = 1)
+      #     # It is also allowed if it is wrapped in some method like Sorbet.
+      #     return to_enum(T.must(__callee__), x, y)
       #   end
       #
       class ToEnumArguments < Base
@@ -43,9 +49,7 @@ module RuboCop
           return unless def_node
 
           enum_conversion_call?(node) do |method_node, arguments|
-            next if method_node.call_type? &&
-                    !method_node.method?(:__method__) && !method_node.method?(:__callee__)
-            next if method_name?(method_node, def_node.method_name) &&
+            next if !method_name?(method_node, def_node.method_name) ||
                     arguments_match?(arguments, def_node)
 
             add_offense(node)
@@ -68,7 +72,7 @@ module RuboCop
           end
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity
+        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
         def argument_match?(send_arg, def_arg)
           def_arg_name = def_arg.children[0]
 
@@ -81,12 +85,14 @@ module RuboCop
             send_arg.hash_type? &&
               send_arg.pairs.any? { |pair| passing_keyword_arg?(pair, def_arg_name) }
           when :kwrestarg
-            send_arg.each_child_node(:kwsplat).any? { |child| child.source == def_arg.source }
+            send_arg.each_child_node(:kwsplat, :forwarded_kwrestarg).any? do |child|
+              child.source == def_arg.source
+            end
           when :forward_arg
             send_arg.forwarded_args_type?
           end
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity
+        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
       end
     end
   end

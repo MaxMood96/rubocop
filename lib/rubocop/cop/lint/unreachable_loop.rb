@@ -111,9 +111,9 @@ module RuboCop
           return false unless node.block_type? || node.numblock_type?
 
           send_node = node.send_node
-          return false if matches_allowed_pattern?(send_node.source)
-
-          send_node.enumerable_method? || send_node.enumerator_method? || send_node.method?(:loop)
+          loopable = send_node.enumerable_method? || send_node.enumerator_method? ||
+                     send_node.method?(:loop)
+          loopable && !matches_allowed_pattern?(send_node.source)
         end
 
         def check(node)
@@ -160,7 +160,7 @@ module RuboCop
             break_statement && !preceded_by_continue_statement?(break_statement)
           when :if
             check_if(node)
-          when :case
+          when :case, :case_match
             check_case(node)
           else
             false
@@ -178,7 +178,13 @@ module RuboCop
           return false unless else_branch
           return false unless break_statement?(else_branch)
 
-          node.when_branches.all? { |branch| branch.body && break_statement?(branch.body) }
+          branches = if node.case_type?
+                       node.when_branches
+                     else
+                       node.in_pattern_branches
+                     end
+
+          branches.all? { |branch| branch.body && break_statement?(branch.body) }
         end
 
         def preceded_by_continue_statement?(break_statement)

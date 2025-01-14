@@ -9,27 +9,17 @@ module RuboCop
       #
       # @example
       #
-      #   # Example for OpenSSL::Cipher instantiation.
-      #
       #   # bad
       #   OpenSSL::Cipher::AES.new(128, :GCM)
       #
       #   # good
       #   OpenSSL::Cipher.new('aes-128-gcm')
       #
-      # @example
-      #
-      #   # Example for OpenSSL::Digest instantiation.
-      #
       #   # bad
       #   OpenSSL::Digest::SHA256.new
       #
       #   # good
       #   OpenSSL::Digest.new('SHA256')
-      #
-      # @example
-      #
-      #   # Example for ::Digest inherited class methods.
       #
       #   # bad
       #   OpenSSL::Digest::SHA256.digest('foo')
@@ -43,6 +33,7 @@ module RuboCop
 
         MSG = 'Use `%<constant>s.%<method>s(%<replacement_args>s)` instead of `%<original>s`.'
 
+        RESTRICT_ON_SEND = %i[new digest].freeze
         NO_ARG_ALGORITHM = %w[BF DES IDEA RC4].freeze
 
         # @!method algorithm_const(node)
@@ -61,7 +52,7 @@ module RuboCop
         PATTERN
 
         def on_send(node)
-          return if node.arguments.any? { |arg| arg.variable? || arg.send_type? || arg.const_type? }
+          return if node.arguments.any? { |arg| arg.variable? || arg.call_type? || arg.const_type? }
           return if digest_const?(node.receiver)
           return unless algorithm_const(node)
 
@@ -100,7 +91,7 @@ module RuboCop
         end
 
         def correction_range(node)
-          range_between(node.loc.dot.end_pos, node.loc.expression.end_pos)
+          range_between(node.loc.dot.end_pos, node.source_range.end_pos)
         end
 
         def openssl_class(node)

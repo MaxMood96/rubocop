@@ -15,6 +15,8 @@ module RuboCop
       'changed_parameters' => ChangedParameter,
       'changed_enforced_styles' => ChangedEnforcedStyles
     }.freeze
+    LOAD_RULES_CACHE = {} # rubocop:disable Style/MutableConstant
+    private_constant :LOAD_RULES_CACHE
 
     attr_reader :rules, :warnings
 
@@ -48,16 +50,17 @@ module RuboCop
     # Default rules for obsoletions are in config/obsoletion.yml
     # Additional rules files can be added with `RuboCop::ConfigObsoletion.files << filename`
     def load_rules # rubocop:disable Metrics/AbcSize
-      rules = self.class.files.each_with_object({}) do |filename, hash|
-        hash.merge!(YAML.safe_load(File.read(filename))) do |_key, first, second|
-          case first
-          when Hash
-            first.merge(second)
-          when Array
-            first.concat(second)
+      rules = LOAD_RULES_CACHE[self.class.files] ||=
+        self.class.files.each_with_object({}) do |filename, hash|
+          hash.merge!(YAML.safe_load(File.read(filename)) || {}) do |_key, first, second|
+            case first
+            when Hash
+              first.merge(second)
+            when Array
+              first.concat(second)
+            end
           end
         end
-      end
 
       cop_rules = rules.slice(*COP_RULE_CLASSES.keys)
       parameter_rules = rules.slice(*PARAMETER_RULE_CLASSES.keys)
@@ -68,11 +71,11 @@ module RuboCop
     # Cop rules are keyed by the name of the original cop
     def load_cop_rules(rules)
       rules.flat_map do |rule_type, data|
-        data.map do |cop_name, configuration|
+        data.filter_map do |cop_name, configuration|
           next unless configuration # allow configurations to be disabled with `CopName: ~`
 
           COP_RULE_CLASSES[rule_type].new(@config, cop_name, configuration)
-        end.compact
+        end
       end
     end
 

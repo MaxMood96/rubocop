@@ -173,6 +173,16 @@ RSpec.describe RuboCop::Cop::Naming::HeredocDelimiterCase, :config do
           RUBY
         end
       end
+
+      # FIXME: `<<''` is a syntax error. This test was added because Parser gem can parse it,
+      # but this will be removed after https://github.com/whitequark/parser/issues/996 is resolved.
+      context 'when using blank heredoc delimiters', unsupported_on: :prism do
+        it 'does not register an offense' do
+          expect_no_offenses(<<~RUBY)
+            <<''
+          RUBY
+        end
+      end
     end
 
     context 'with a squiggly heredoc' do

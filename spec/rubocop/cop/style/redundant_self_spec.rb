@@ -16,7 +16,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantSelf, :config do
     expect_no_offenses('a = self.a')
   end
 
-  it 'accepts when nested receiver and lvalue have the name name' do
+  it 'accepts when nested receiver and lvalue have the same name' do
     expect_no_offenses('a = self.a || b || c')
   end
 
@@ -238,6 +238,14 @@ RSpec.describe RuboCop::Cop::Style::RedundantSelf, :config do
         end
       RUBY
     end
+
+    it 'accepts `kwnilarg` argument node type' do
+      expect_no_offenses(<<~RUBY)
+        def requested_specs(groups, **nil)
+          some_method(self.groups)
+        end
+      RUBY
+    end
   end
 
   describe 'class methods' do
@@ -307,6 +315,51 @@ RSpec.describe RuboCop::Cop::Style::RedundantSelf, :config do
         self.a = a
         self.b.some_method_call b
       end
+    RUBY
+  end
+
+  it 'does not register an offense when using `self.it` in the single line block' do
+    # `Lint/ItWithoutArgumentsInBlock` respects for this syntax.
+    expect_no_offenses(<<~RUBY)
+      0.times { self.it }
+    RUBY
+  end
+
+  it 'does not register an offense when using `self.it` in the multiline block' do
+    # `Lint/ItWithoutArgumentsInBlock` respects for this syntax.
+    expect_no_offenses(<<~RUBY)
+      0.times do
+        self.it
+        it = 1
+        it
+      end
+    RUBY
+  end
+
+  it 'registers an offense when using `it` without arguments in `def` body' do
+    expect_offense(<<~RUBY)
+      def foo
+        self.it
+        ^^^^ Redundant `self` detected.
+      end
+    RUBY
+  end
+
+  it 'registers an offense when using `it` without arguments in the block with empty block parameter' do
+    expect_offense(<<~RUBY)
+      0.times { ||
+        self.it
+        ^^^^ Redundant `self` detected.
+      }
+    RUBY
+  end
+
+  it 'registers an offense when using `it` without arguments in the block with useless block parameter' do
+    expect_offense(<<~RUBY)
+      0.times { |_n|
+        self.it
+        ^^^^ Redundant `self` detected.
+      }
     RUBY
   end
 

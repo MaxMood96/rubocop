@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-# rubocop:disable RSpec/FilePath
 RSpec.describe RuboCop::Cop::EnforceSuperclass, :restore_registry do
-  subject(:cop) { cop_class.new }
+  subject(:cop) { cop_class.new(configuration) }
 
   let(:cop_class) { RuboCop::Cop::RSpec::ApplicationRecord }
   let(:msg) { 'Models should subclass `ApplicationRecord`' }
@@ -117,4 +116,3 @@ RSpec.describe RuboCop::Cop::EnforceSuperclass, :restore_registry do
     RUBY
   end
 end
-# rubocop:enable RSpec/FilePath

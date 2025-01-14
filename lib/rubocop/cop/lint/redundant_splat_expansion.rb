@@ -3,7 +3,7 @@
 module RuboCop
   module Cop
     module Lint
-      # Checks for unneeded usages of splat expansion
+      # Checks for unneeded usages of splat expansion.
       #
       # @example
       #
@@ -135,29 +135,30 @@ module RuboCop
           grandparent.array_type? && grandparent.children.size > 1
         end
 
+        # rubocop:disable Metrics/AbcSize
         def replacement_range_and_content(node)
-          variable, = *node
-          loc = node.loc
-          expression = loc.expression
+          variable = node.children.first
+          expression = node.source_range
 
           if array_new?(variable)
-            expression = node.parent.loc.expression if node.parent.array_type?
+            expression = node.parent.source_range if node.parent.array_type?
             [expression, variable.source]
           elsif !variable.array_type?
             [expression, "[#{variable.source}]"]
           elsif redundant_brackets?(node)
             [expression, remove_brackets(variable)]
           else
-            [loc.operator, '']
+            [node.loc.operator, '']
           end
         end
+        # rubocop:enable Metrics/AbcSize
 
         def array_splat?(node)
           node.children.first.array_type?
         end
 
         def method_argument?(node)
-          node.parent.send_type?
+          node.parent.call_type?
         end
 
         def part_of_an_array?(node)
@@ -171,7 +172,7 @@ module RuboCop
           parent = node.parent
           grandparent = node.parent.parent
 
-          parent.when_type? || parent.send_type? || part_of_an_array?(node) ||
+          parent.when_type? || method_argument?(node) || part_of_an_array?(node) ||
             grandparent&.resbody_type?
         end
 
@@ -196,7 +197,7 @@ module RuboCop
         def use_percent_literal_array_argument?(node)
           argument = node.children.first
 
-          node.parent.send_type? &&
+          method_argument?(node) &&
             (argument.percent_literal?(:string) || argument.percent_literal?(:symbol))
         end
 

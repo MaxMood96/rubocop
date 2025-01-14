@@ -3,7 +3,7 @@
 RSpec.describe RuboCop::Cop::Style::ParallelAssignment, :config do
   let(:config) { RuboCop::Config.new('Layout/IndentationWidth' => { 'Width' => 2 }) }
 
-  it 'registers an offense when the right side has mulitiple arrays' do
+  it 'registers an offense when the right side has multiple arrays' do
     expect_offense(<<~RUBY)
       a, b, c = [1, 2], [3, 4], [5, 6]
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Do not use parallel assignment.
@@ -208,6 +208,8 @@ RSpec.describe RuboCop::Cop::Style::ParallelAssignment, :config do
   it_behaves_like('allowed', 'a, = *foo')
   it_behaves_like('allowed', 'a, *b = [1, 2, 3]')
   it_behaves_like('allowed', '*a, b = [1, 2, 3]')
+  it_behaves_like('allowed', '*, b = [1, 2, 3]')
+  it_behaves_like('allowed', 'a, *, b = [1, 2, 3]')
   it_behaves_like('allowed', 'a, b = b, a')
   it_behaves_like('allowed', 'a, b, c = b, c, a')
   it_behaves_like('allowed', 'a, b = (a + b), (a - b)')
@@ -531,7 +533,23 @@ RSpec.describe RuboCop::Cop::Style::ParallelAssignment, :config do
     RUBY
   end
 
-  it 'corrects when the expression uses a modifier rescue statement' do
+  it 'corrects when the expression uses a modifier rescue statement', :ruby26 do
+    expect_offense(<<~RUBY)
+      a, b = 1, 2 rescue foo
+      ^^^^^^^^^^^ Do not use parallel assignment.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      begin
+        a = 1
+        b = 2
+      rescue
+        foo
+      end
+    RUBY
+  end
+
+  it 'corrects when the expression uses a modifier rescue statement', :ruby27 do
     expect_offense(<<~RUBY)
       a, b = 1, 2 rescue foo
       ^^^^^^^^^^^ Do not use parallel assignment.
@@ -587,8 +605,7 @@ RSpec.describe RuboCop::Cop::Style::ParallelAssignment, :config do
     RUBY
   end
 
-  it 'corrects when the expression uses a modifier rescue statement ' \
-     'as the only thing inside of a method' do
+  it 'corrects when the expression uses a modifier rescue statement as the only thing inside of a method', :ruby26 do
     expect_offense(<<~RUBY)
       def foo
         a, b = 1, 2 rescue foo
@@ -606,7 +623,47 @@ RSpec.describe RuboCop::Cop::Style::ParallelAssignment, :config do
     RUBY
   end
 
-  it 'corrects when the expression uses a modifier rescue statement inside of a method' do
+  it 'corrects when the expression uses a modifier rescue statement as the only thing inside of a method', :ruby27 do
+    expect_offense(<<~RUBY)
+      def foo
+        a, b = 1, 2 rescue foo
+        ^^^^^^^^^^^ Do not use parallel assignment.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def foo
+        a = 1
+        b = 2
+      rescue
+        foo
+      end
+    RUBY
+  end
+
+  it 'corrects when the expression uses a modifier rescue statement inside of a method', :ruby26 do
+    expect_offense(<<~RUBY)
+      def foo
+        a, b = %w(1 2) rescue foo
+        ^^^^^^^^^^^^^^ Do not use parallel assignment.
+        something_else
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def foo
+        begin
+          a = '1'
+          b = '2'
+        rescue
+          foo
+        end
+        something_else
+      end
+    RUBY
+  end
+
+  it 'corrects when the expression uses a modifier rescue statement inside of a method', :ruby27 do
     expect_offense(<<~RUBY)
       def foo
         a, b = %w(1 2) rescue foo
@@ -639,6 +696,18 @@ RSpec.describe RuboCop::Cop::Style::ParallelAssignment, :config do
       c = b + 1
       b = a + 1
       a = 1
+    RUBY
+  end
+
+  it 'corrects when assignments include __FILE__' do
+    expect_offense(<<~RUBY)
+      a, b = c, __FILE__
+      ^^^^^^^^^^^^^^^^^^ Do not use parallel assignment.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      a = c
+      b = __FILE__
     RUBY
   end
 
@@ -699,7 +768,23 @@ RSpec.describe RuboCop::Cop::Style::ParallelAssignment, :config do
       RUBY
     end
 
-    it 'works with rescue' do
+    it 'works with rescue', :ruby26 do
+      expect_offense(<<~RUBY)
+        a, b = 1, 2 rescue foo
+        ^^^^^^^^^^^ Do not use parallel assignment.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        begin
+           a = 1
+           b = 2
+        rescue
+           foo
+        end
+      RUBY
+    end
+
+    it 'works with rescue', :ruby27 do
       expect_offense(<<~RUBY)
         a, b = 1, 2 rescue foo
         ^^^^^^^^^^^ Do not use parallel assignment.

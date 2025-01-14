@@ -56,7 +56,6 @@ module RuboCop
                                        range: NOT_GIVEN, side: :both, newlines: true,
                                        whitespace: false, continuations: false,
                                        buffer: @processed_source.buffer)
-
         range = range_positional unless range_positional == NOT_GIVEN
 
         src = buffer.source
@@ -132,12 +131,7 @@ module RuboCop
       end
 
       def range_with_comments(node)
-        ranges = [
-          node,
-          *@processed_source.ast_with_comments[node]
-        ].map do |element|
-          element.location.expression
-        end
+        ranges = [node, *@processed_source.ast_with_comments[node]].map(&:source_range)
         ranges.reduce do |result, range|
           add_range(result, range)
         end

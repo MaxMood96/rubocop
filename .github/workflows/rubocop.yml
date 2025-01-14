@@ -1,5 +1,3 @@
-###
-# Please keep /.mergify.yml synced!
 name: CI
 
 on:
@@ -17,84 +15,160 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  main:
-    name: >-
-      ${{ matrix.os }} ${{ matrix.ruby }}
-    runs-on: ${{ matrix.os }}-latest
-    env:
-      # See https://github.com/tmm1/test-queue#environment-variables
-      TEST_QUEUE_WORKERS: 2
+  spec-ubuntu:
+    name: Spec - ubuntu ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # [ubuntu, macos, windows]
-        os: [windows]
-        ruby: ['2.6', '2.7', '3.0', '3.1', '3.2', 'head']
-        include:
-          - os: windows
-            ruby: mingw
-        exclude:
-          - os: windows
-            ruby: head
+        ruby: ['2.7', '3.0', '3.1', '3.2', '3.3', '3.4', 'head']
 
     steps:
-      - name: windows misc
-        if: matrix.os == 'windows'
-        run: |
-          # set TMPDIR, git core.autocrlf
-          echo "TMPDIR=$env:RUNNER_TEMP" >> $GITHUB_ENV
-          git config --system core.autocrlf false
-      - name: checkout
-        uses: actions/checkout@v3
-      - name: set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+      - name: Check requiring libraries successfully
+        # See https://github.com/rubocop/rubocop/pull/4523#issuecomment-309136113
+        run: ruby -I lib -r bundler/setup -r rubocop -e 'exit 0'
       - name: spec
-        run: bundle exec rake spec
-      - name: ascii_spec
-        run: bundle exec rake ascii_spec
-      - name: internal_investigation
-        run: bundle exec rake internal_investigation
+        env:
+          CI_RUBY_VERSION: ${{ matrix.ruby }}
+          CC_TEST_REPORTER_ID: dummy # Value doesn't matter, enables json formatter
+          STRICT_WARNINGS: 1
+        run: COVERAGE=true bundle exec rake spec
+      - name: Upload Coverage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ubuntu-${{ matrix.ruby }}
+          path: coverage/coverage.json
+          if-no-files-found: error
 
-  jruby:
-    name: JRuby 9.4
+  spec-jruby:
+    name: Spec - JRuby
     runs-on: ubuntu-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v3
-      - name: set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: jruby-9.4
+          ruby-version: 'jruby' # Latest stable JRuby version
           bundler-cache: true
       - name: spec
         run: bundle exec rake spec
+
+  spec-windows:
+    needs: spec-ubuntu # Don't spend CI resources on slow Windows specs if CI won't pass anyway.
+    name: Spec - windows ${{ matrix.ruby }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - '2.7'  # Oldest supported version
+          - 'ruby' # Latest stable CRuby version
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Check requiring libraries successfully
+        # See https://github.com/rubocop/rubocop/pull/4523#issuecomment-309136113
+        run: ruby -I lib -r bundler/setup -r rubocop -e 'exit 0'
+      - name: spec
+        env:
+          CI_RUBY_VERSION: ${{ matrix.ruby }}
+        run: bundle exec rake spec
+
+  upload_coverage:
+    name: Upload Coverage
+    needs: spec-ubuntu
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        name: Download Coverage Artifacts
+        with:
+          pattern: coverage-*
+      - uses: paambaati/codeclimate-action@v9
+        env:
+          CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
+        if: ${{ env.CC_TEST_REPORTER_ID != '' }}
+        with:
+          coverageLocations: |
+            ${{github.workspace}}/coverage-*/coverage.json:simplecov
+
+  ascii_spec:
+    name: Ascii Spec - ${{ matrix.os }} ${{ matrix.ruby }}
+    runs-on: ${{ matrix.os }}-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, windows]
+        ruby:
+          - '2.7'  # Oldest supported version
+          - 'ruby' # Latest stable CRuby version
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
       - name: ascii_spec
+        env:
+          CI_RUBY_VERSION: ${{ matrix.ruby }}
         run: bundle exec rake ascii_spec
-      - name: internal_investigation
-        run: bundle exec rake internal_investigation
+
+  documentation_check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ruby # Latest stable CRuby version
+          bundler-cache: true
+      - name: Check documentation syntax
+        run: bundle exec rake documentation_syntax_check
+
+  prism:
+    runs-on: ubuntu-latest
+    name: Prism
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          # Specify the minimum Ruby version 2.7 required for Prism to run.
+          ruby-version: 2.7
+          bundler-cache: true
+      - name: spec
+        env:
+          PARSER_ENGINE: parser_prism
+        run: bundle exec rake prism_spec
 
   rspec4:
     runs-on: ubuntu-latest
     name: RSpec 4
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Use latest RSpec 4 from `4-0-dev` branch
         run: |
           sed -e "/'rspec', '~> 3/d" -i Gemfile
           cat << EOF > Gemfile.local
             gem 'rspec', github: 'rspec/rspec', branch: '4-0-dev'
-            gem 'rspec-core', github: 'rspec/rspec-core', branch: '4-0-dev'
-            gem 'rspec-expectations', github: 'rspec/rspec-expectations', branch: '4-0-dev'
-            gem 'rspec-mocks', github: 'rspec/rspec-mocks', branch: '4-0-dev'
-            gem 'rspec-support', github: 'rspec/rspec-support', branch: '4-0-dev'
+            gem 'rspec-core', github: 'rspec/rspec', branch: '4-0-dev'
+            gem 'rspec-expectations', github: 'rspec/rspec', branch: '4-0-dev'
+            gem 'rspec-mocks', github: 'rspec/rspec', branch: '4-0-dev'
+            gem 'rspec-support', github: 'rspec/rspec', branch: '4-0-dev'
           EOF
-      - name: set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: 2.7
           bundler-cache: true
       - name: spec
-        run: bundle exec rspec
+        run: bundle exec rake spec

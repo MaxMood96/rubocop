@@ -4,13 +4,15 @@ module RuboCop
   # This class parses the special `rubocop:disable` comments in a source
   # and provides a way to check if each cop is enabled at arbitrary line.
   class CommentConfig
-    extend Forwardable
+    extend SimpleForwardable
 
     CONFIG_DISABLED_LINE_RANGE_MIN = -Float::INFINITY
 
     # This class provides an API compatible with RuboCop::DirectiveComment
     # to be used for cops that are disabled in the config file
     class ConfigDisabledCopDirectiveComment
+      include RuboCop::Ext::Comment
+
       attr_reader :text, :loc, :line_number
 
       Loc = Struct.new(:expression)

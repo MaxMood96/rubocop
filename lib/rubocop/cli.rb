@@ -11,8 +11,8 @@ module RuboCop
     STATUS_ERROR       = 2
     STATUS_INTERRUPTED = Signal.list['INT'] + 128
     DEFAULT_PARALLEL_OPTIONS = %i[
-      color debug display_style_guide display_time display_only_fail_level_offenses
-      display_only_failed except extra_details fail_level fix_layout format
+      color config debug display_style_guide display_time display_only_fail_level_offenses
+      display_only_failed editor_mode except extra_details fail_level fix_layout format
       ignore_disable_comments lint only only_guide_cops require safe
       autocorrect safe_autocorrect autocorrect_all
     ].freeze
@@ -57,6 +57,10 @@ module RuboCop
     rescue RuboCop::Error => e
       warn Rainbow("Error: #{e.message}").red
       STATUS_ERROR
+    rescue Interrupt
+      warn ''
+      warn 'Exiting...'
+      STATUS_INTERRUPTED
     rescue Finished
       STATUS_SUCCESS
     rescue OptionParser::InvalidOption => e
@@ -87,20 +91,20 @@ module RuboCop
 
       tmp_dir = File.join(ConfigFinder.project_root, 'tmp')
       FileUtils.mkdir_p(tmp_dir)
+      cpu_profile_file = File.join(tmp_dir, 'rubocop-stackprof.dump')
       status = nil
 
-      StackProf.run(out: File.join(tmp_dir, 'rubocop-stackprof.dump')) do
+      StackProf.run(out: cpu_profile_file) do
         status = yield
       end
-      puts 'Profile report generated'
+      puts "Profile report generated at #{cpu_profile_file}"
 
       if with_memory
         puts 'Building memory report...'
         report = MemoryProfiler.stop
-        report.pretty_print(
-          to_file: File.join(tmp_dir, 'rubocop-memory_profiler.txt'),
-          scale_bytes: true
-        )
+        memory_profile_file = File.join(tmp_dir, 'rubocop-memory_profiler.txt')
+        report.pretty_print(to_file: memory_profile_file, scale_bytes: true)
+        puts "Memory report generated at #{memory_profile_file}"
       end
       status
     end
@@ -151,6 +155,7 @@ module RuboCop
 
     def act_on_options
       set_options_to_config_loader
+      handle_editor_mode
 
       @config_store.options_config = @options[:config] if @options[:config]
       @config_store.force_default_config! if @options[:force_default_config]
@@ -174,14 +179,21 @@ module RuboCop
       ConfigLoader.ignore_unrecognized_cops = @options[:ignore_unrecognized_cops]
     end
 
+    def handle_editor_mode
+      RuboCop::LSP.enable if @options[:editor_mode]
+    end
+
+    # rubocop:disable Metrics/CyclomaticComplexity
     def handle_exiting_options
       return unless Options::EXITING_OPTIONS.any? { |o| @options.key? o }
 
       run_command(:version) if @options[:version] || @options[:verbose_version]
       run_command(:show_cops) if @options[:show_cops]
       run_command(:show_docs_url) if @options[:show_docs_url]
+      run_command(:lsp) if @options[:lsp]
       raise Finished
     end
+    # rubocop:enable Metrics/CyclomaticComplexity
 
     def apply_default_formatter
       # This must be done after the options have already been processed,

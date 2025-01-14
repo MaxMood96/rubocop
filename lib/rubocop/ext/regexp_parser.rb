@@ -22,26 +22,9 @@ module RuboCop
         module Base
           attr_accessor :origin
 
-          if Gem::Version.new(Regexp::Parser::VERSION) >= Gem::Version.new('2.0')
-            # Shortcut to `loc.expression`
-            def expression
-              @expression ||= origin.adjust(begin_pos: ts, end_pos: ts + full_length)
-            end
-          # Please remove this `else` branch when support for regexp_parser 1.8 will be dropped.
-          # It's for compatibility with regexp_arser 1.8 and will never be maintained.
-          else
-            attr_accessor :source
-
-            def start_index
-              # ts is a byte index; convert it to a character index
-              @start_index ||= source.byteslice(0, ts).length
-            end
-
-            # Shortcut to `loc.expression`
-            def expression
-              end_pos = start_index + full_length
-              @expression ||= origin.adjust(begin_pos: start_index, end_pos: end_pos)
-            end
+          # Shortcut to `loc.expression`
+          def expression
+            @expression ||= origin.adjust(begin_pos: ts, end_pos: ts + full_length)
           end
 
           # @returns a location map like `parser` does, with:
@@ -68,7 +51,9 @@ module RuboCop
             return { body: expression } unless (q = quantifier)
 
             body = expression.adjust(end_pos: -q.text.length)
-            q_loc = expression.with(begin_pos: body.end_pos)
+            q.origin = origin
+            q_loc = q.expression
+
             { body: body, quantifier: q_loc }
           end
         end
@@ -86,6 +71,7 @@ module RuboCop
         end
       end
       ::Regexp::Expression::Base.include Expression::Base
+      ::Regexp::Expression::Quantifier.include Expression::Base
       ::Regexp::Expression::CharacterSet.include Expression::CharacterSet
     end
   end

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
-  shared_examples 'redundant' do |expr, correct, type|
-    it "registers an offense for parentheses around #{type}" do
+  shared_examples 'redundant' do |expr, correct, type, options|
+    it "registers an offense for parentheses around #{type}", *options do
       expect_offense(<<~RUBY, expr: expr)
         %{expr}
         ^{expr} Don't use parentheses around #{type}.
@@ -14,17 +14,17 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     end
   end
 
-  shared_examples 'plausible' do |expr|
-    it 'accepts parentheses when arguments are unparenthesized' do
+  shared_examples 'plausible' do |expr, options|
+    it 'accepts parentheses when arguments are unparenthesized', *options do
       expect_no_offenses(expr)
     end
   end
 
-  shared_examples 'keyword with return value' do |keyword|
-    it_behaves_like 'redundant', "(#{keyword})", keyword, 'a keyword'
-    it_behaves_like 'redundant', "(#{keyword}())", "#{keyword}()", 'a keyword'
-    it_behaves_like 'redundant', "(#{keyword}(1))", "#{keyword}(1)", 'a keyword'
-    it_behaves_like 'plausible', "(#{keyword} 1, 2)"
+  shared_examples 'keyword with return value' do |keyword, options|
+    it_behaves_like 'redundant', "(#{keyword})", keyword, 'a keyword', options
+    it_behaves_like 'redundant', "(#{keyword}())", "#{keyword}()", 'a keyword', options
+    it_behaves_like 'redundant', "(#{keyword}(1))", "#{keyword}(1)", 'a keyword', options
+    it_behaves_like 'plausible', "(#{keyword} 1, 2)", options
   end
 
   shared_examples 'keyword with arguments' do |keyword|
@@ -53,8 +53,12 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   it_behaves_like 'redundant', '(__FILE__)', '__FILE__', 'a keyword'
   it_behaves_like 'redundant', '(__LINE__)', '__LINE__', 'a keyword'
   it_behaves_like 'redundant', '(__ENCODING__)', '__ENCODING__', 'a keyword'
-  it_behaves_like 'redundant', '(redo)', 'redo', 'a keyword'
-  it_behaves_like 'redundant', '(retry)', 'retry', 'a keyword'
+  it_behaves_like 'redundant', '(redo)', 'redo', 'a keyword', [:ruby32, { unsupported_on: :prism }]
+
+  context 'Ruby <= 3.2', :ruby32, unsupported_on: :prism do
+    it_behaves_like 'redundant', '(retry)', 'retry', 'a keyword'
+  end
+
   it_behaves_like 'redundant', '(self)', 'self', 'a keyword'
 
   context 'ternaries' do
@@ -118,12 +122,13 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     end
   end
 
-  it_behaves_like 'keyword with return value', 'break'
-  it_behaves_like 'keyword with return value', 'next'
+  it_behaves_like 'keyword with return value', 'break', [:ruby32, { unsupported_on: :prism }]
+  it_behaves_like 'keyword with return value', 'next', [:ruby32, { unsupported_on: :prism }]
+  it_behaves_like 'keyword with arguments', 'yield'
+
   it_behaves_like 'keyword with return value', 'return'
 
   it_behaves_like 'keyword with arguments', 'super'
-  it_behaves_like 'keyword with arguments', 'yield'
 
   it_behaves_like 'redundant', '(defined?(:A))', 'defined?(:A)', 'a keyword'
   it_behaves_like 'plausible', '(defined? :A)'
@@ -150,6 +155,10 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
 
   it_behaves_like 'redundant', '(X)', 'X', 'a constant'
 
+  it_behaves_like 'redundant', '(-> { x })', '-> { x }', 'an expression'
+  it_behaves_like 'redundant', '(lambda { x })', 'lambda { x }', 'an expression'
+  it_behaves_like 'redundant', '(proc { x })', 'proc { x }', 'an expression'
+
   it_behaves_like 'redundant', '(x)', 'x', 'a method call'
   it_behaves_like 'redundant', '(x(1, 2))', 'x(1, 2)', 'a method call'
   it_behaves_like 'redundant', '("x".to_sym)', '"x".to_sym', 'a method call'
@@ -159,6 +168,19 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   it_behaves_like 'redundant', '(["foo"][0])', '["foo"][0]', 'a method call'
   it_behaves_like 'redundant', '({0 => :a}[0])', '{0 => :a}[0]', 'a method call'
   it_behaves_like 'redundant', '(x; y)', 'x; y', 'a method call'
+
+  it_behaves_like 'redundant', '(x && y)', 'x && y', 'a logical expression'
+  it_behaves_like 'redundant', '(x || y)', 'x || y', 'a logical expression'
+  it_behaves_like 'redundant', '(x and y)', 'x and y', 'a logical expression'
+  it_behaves_like 'redundant', '(x or y)', 'x or y', 'a logical expression'
+
+  it_behaves_like 'redundant', '(x == y)', 'x == y', 'a comparison expression'
+  it_behaves_like 'redundant', '(x === y)', 'x === y', 'a comparison expression'
+  it_behaves_like 'redundant', '(x != y)', 'x != y', 'a comparison expression'
+  it_behaves_like 'redundant', '(x > y)', 'x > y', 'a comparison expression'
+  it_behaves_like 'redundant', '(x >= y)', 'x >= y', 'a comparison expression'
+  it_behaves_like 'redundant', '(x < y)', 'x < y', 'a comparison expression'
+  it_behaves_like 'redundant', '(x <= y)', 'x <= y', 'a comparison expression'
 
   it_behaves_like 'redundant', '(!x)', '!x', 'a unary operation'
   it_behaves_like 'redundant', '(~x)', '~x', 'a unary operation'
@@ -176,6 +198,17 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     expect_offense(<<~RUBY)
       (x).y(z)
       ^^^ Don't use parentheses around a method call.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      x.y(z)
+    RUBY
+  end
+
+  it 'registers an offense for parens around method arguments of a method call with an argument' do
+    expect_offense(<<~RUBY)
+      x.y((z))
+          ^^^ Don't use parentheses around a method call.
     RUBY
 
     expect_correction(<<~RUBY)
@@ -377,6 +410,121 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     RUBY
   end
 
+  it 'registers an offense for parens around `->` with `do`...`end` block' do
+    expect_offense(<<~RUBY)
+      scope :my_scope, (-> do
+                       ^^^^^^ Don't use parentheses around an expression.
+        where(column: :value)
+      end)
+    RUBY
+
+    expect_correction(<<~RUBY)
+      scope :my_scope, -> do
+        where(column: :value)
+      end
+    RUBY
+  end
+
+  it 'registers an offense for parens around `lambda` with `{`...`}` block' do
+    expect_offense(<<~RUBY)
+      scope :my_scope, (lambda {
+                       ^^^^^^^^^ Don't use parentheses around an expression.
+        where(column: :value)
+      })
+    RUBY
+
+    expect_correction(<<~RUBY)
+      scope :my_scope, lambda {
+        where(column: :value)
+      }
+    RUBY
+  end
+
+  it 'registers an offense for parens around `proc` with `{`...`}` block' do
+    expect_offense(<<~RUBY)
+      scope :my_scope, (proc {
+                       ^^^^^^^ Don't use parentheses around an expression.
+        where(column: :value)
+      })
+    RUBY
+
+    expect_correction(<<~RUBY)
+      scope :my_scope, proc {
+        where(column: :value)
+      }
+    RUBY
+  end
+
+  it 'does not register an offense for parens around `lambda` with `do`...`end` block' do
+    expect_no_offenses(<<~RUBY)
+      scope :my_scope, (lambda do
+        where(column: :value)
+      end)
+    RUBY
+  end
+
+  it 'does not register an offense for parens around `proc` with `do`...`end` block' do
+    expect_no_offenses(<<~RUBY)
+      scope :my_scope, (proc do
+        where(column: :value)
+      end)
+    RUBY
+  end
+
+  it 'registers an offense for parentheses around a method chain with `{`...`}` block in keyword argument' do
+    expect_offense(<<~RUBY)
+      foo bar: (baz {
+               ^^^^^^ Don't use parentheses around a method call.
+      }.qux)
+    RUBY
+  end
+
+  it 'registers an offense for parentheses around a method chain with `{`...`}` numblock in keyword argument' do
+    expect_offense(<<~RUBY)
+      foo bar: (baz {
+               ^^^^^^ Don't use parentheses around a method call.
+        do_something(_1)
+      }.qux)
+    RUBY
+  end
+
+  it 'does not register an offense for parentheses around a method chain with `do`...`end` block in keyword argument' do
+    expect_no_offenses(<<~RUBY)
+      foo bar: (baz do
+      end.qux)
+    RUBY
+  end
+
+  it 'does not register an offense for parentheses around method chains with `do`...`end` block in keyword argument' do
+    expect_no_offenses(<<~RUBY)
+      foo bar: (baz do
+      end.qux.quux)
+    RUBY
+  end
+
+  it 'does not register an offense for parentheses around a method chain with `do`...`end` numblock in keyword argument' do
+    expect_no_offenses(<<~RUBY)
+      foo bar: (baz do
+        do_something(_1)
+      end.qux)
+    RUBY
+  end
+
+  it 'does not register an offense for parentheses around a method chain with `do`...`end` block in keyword argument for safe navigation call' do
+    expect_no_offenses(<<~RUBY)
+      obj&.foo bar: (baz do
+      end.qux)
+    RUBY
+  end
+
+  it 'does not register an offense for parentheses around a method chain with `do`...`end` numblock in keyword argument for safe navigation call' do
+    expect_no_offenses(<<~RUBY)
+      obj&.foo bar: (baz do
+        do_something(_1)
+      end.qux)
+    RUBY
+  end
+
   it_behaves_like 'plausible', '(-2)**2'
   it_behaves_like 'plausible', '(-2.1)**2'
 
@@ -449,6 +597,36 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     RUBY
   end
 
+  it 'registers an offense when the use of parentheses around `&&` expressions in assignment' do
+    expect_offense(<<~RUBY)
+      var = (foo && bar)
+            ^^^^^^^^^^^^ Don't use parentheses around a logical expression.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      var = foo && bar
+    RUBY
+  end
+
+  it 'registers an offense when the use of parentheses around `||` expressions in assignment' do
+    expect_offense(<<~RUBY)
+      var = (foo || bar)
+            ^^^^^^^^^^^^ Don't use parentheses around a logical expression.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      var = foo || bar
+    RUBY
+  end
+
+  it 'accepts the use of parentheses around `or` expressions in assignment' do
+    expect_no_offenses('var = (foo or bar)')
+  end
+
+  it 'accepts the use of parentheses around `and` expressions in assignment' do
+    expect_no_offenses('var = (foo and bar)')
+  end
+
   it 'accepts parentheses around a method call with unparenthesized arguments' do
     expect_no_offenses('(a 1, 2) && (1 + 1)')
   end
@@ -469,8 +647,131 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     expect_no_offenses('(a...b)')
   end
 
-  it 'accepts parentheses around operator keywords' do
+  it 'accepts an irange starting is a parenthesized condition' do
+    expect_no_offenses('(a || b)..c')
+  end
+
+  it 'accepts an erange starting is a parenthesized condition' do
+    expect_no_offenses('(a || b)...c')
+  end
+
+  it 'accepts an irange ending is a parenthesized condition' do
+    expect_no_offenses('a..(b || c)')
+  end
+
+  it 'accepts an erange ending is a parenthesized condition' do
+    expect_no_offenses('a...(b || c)')
+  end
+
+  it 'accepts regexp literal attempts to match against a parenthesized condition' do
+    expect_no_offenses('/regexp/ =~ (b || c)')
+  end
+
+  it 'accepts variable attempts to match against a parenthesized condition' do
+    expect_no_offenses('regexp =~ (b || c)')
+  end
+
+  it 'registers parentheses around `||` logical operator keywords in method definition' do
+    expect_offense(<<~RUBY)
+      def foo
+        (x || y)
+        ^^^^^^^^ Don't use parentheses around a logical expression.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def foo
+        x || y
+      end
+    RUBY
+  end
+
+  it 'registers parentheses around `&&` logical operator keywords in method definition' do
+    expect_offense(<<~RUBY)
+      def foo
+        (x && y)
+        ^^^^^^^^ Don't use parentheses around a logical expression.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def foo
+        x && y
+      end
+    RUBY
+  end
+
+  it 'accepts parentheses around arithmetic operator' do
+    expect_no_offenses('x - (y || z)')
+  end
+
+  it 'accepts parentheses around logical operator keywords (`and`, `and`, `or`)' do
     expect_no_offenses('(1 and 2) and (3 or 4)')
+  end
+
+  it 'accepts parentheses around logical operator keywords (`or`, `or`, `and`)' do
+    expect_no_offenses('(1 or 2) or (3 and 4)')
+  end
+
+  it 'accepts parentheses around comparison operator keywords' do
+    # Parentheses are redundant, but respect user's intentions for readability.
+    expect_no_offenses('x && (y == z)')
+  end
+
+  it 'accepts parentheses around logical operator in splat' do
+    # Parentheses are redundant, but respect user's intentions for readability.
+    expect_no_offenses('x = *(y || z)')
+  end
+
+  it 'accepts parentheses around `case` expression in splat' do
+    # Parentheses are redundant, but respect user's intentions for readability.
+    expect_no_offenses('x = *(case true when true then false end)')
+  end
+
+  it 'accepts parentheses around `case` expression without condition in splat' do
+    # Parentheses are redundant, but respect user's intentions for readability.
+    expect_no_offenses('x = *(case when rand > 0.5 then 1 end)')
+  end
+
+  it 'accepts parentheses around logical operator in double splat' do
+    # Parentheses are redundant, but respect user's intentions for readability.
+    expect_no_offenses('x(**(y || z))')
+  end
+
+  it 'accepts parentheses around logical operator in ternary operator' do
+    # Parentheses are redundant, but respect user's intentions for readability.
+    expect_no_offenses('cond ? x : (y || z)')
+  end
+
+  it 'registers parentheses around logical operator in `if`...`else`' do
+    expect_offense(<<~RUBY)
+      if cond
+        x
+      else
+        (y || z)
+        ^^^^^^^^ Don't use parentheses around a logical expression.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      if cond
+        x
+      else
+        y || z
+      end
+    RUBY
+  end
+
+  it 'accepts parentheses around a method call with parenthesized logical expression receiver' do
+    expect_no_offenses('(x || y).z')
+  end
+
+  it 'accepts parentheses around a method call with parenthesized comparison expression receiver' do
+    expect_no_offenses('(x == y).zero?')
+  end
+
+  it 'accepts parentheses around single argument separated by semicolon' do
+    expect_no_offenses('x((prepare; perform))')
   end
 
   it 'registers an offense when there is space around the parentheses' do
@@ -507,6 +808,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   context 'when the first argument in a method call begins with a hash literal' do
     it 'accepts parentheses if the argument list is not parenthesized' do
       expect_no_offenses('x ({ y: 1 }), z')
+      expect_no_offenses('x ({ y: 1 }).merge({ y: 2 }), z')
       expect_no_offenses('x ({ y: 1 }.merge({ y: 2 })), z')
       expect_no_offenses('x ({ y: 1 }.merge({ y: 2 }).merge({ y: 3 })), z')
     end
@@ -574,6 +876,79 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     RUBY
   end
 
+  it 'accepts parentheses in super call with multiline style argument' do
+    expect_no_offenses(<<~RUBY)
+      super (
+        42
+      )
+    RUBY
+  end
+
+  it 'accepts parentheses in yield call with multiline style argument' do
+    expect_no_offenses(<<~RUBY)
+      yield (
+        42
+      )
+    RUBY
+  end
+
+  it 'accepts parentheses in `return` with multiline style argument' do
+    expect_no_offenses(<<~RUBY)
+      return (
+        42
+      )
+    RUBY
+  end
+
+  it 'registers an offense when parentheses in `return` with single style argument' do
+    expect_offense(<<~RUBY)
+      return (42)
+             ^^^^ Don't use parentheses around a literal.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      return 42
+    RUBY
+  end
+
+  it 'accepts parentheses in `next` with multiline style argument', :ruby32, unsupported_on: :prism do
+    expect_no_offenses(<<~RUBY)
+      next (
+        42
+      )
+    RUBY
+  end
+
+  it 'registers an offense when parentheses in `next` with single style argument', :ruby32, unsupported_on: :prism do
+    expect_offense(<<~RUBY)
+      next (42)
+           ^^^^ Don't use parentheses around a literal.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      next 42
+    RUBY
+  end
+
+  it 'accepts parentheses in `break` with multiline style argument', :ruby32, unsupported_on: :prism do
+    expect_no_offenses(<<~RUBY)
+      break (
+        42
+      )
+    RUBY
+  end
+
+  it 'registers an offense when parentheses in `break` with single style argument', :ruby32, unsupported_on: :prism do
+    expect_offense(<<~RUBY)
+      break (42)
+            ^^^^ Don't use parentheses around a literal.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      break 42
+    RUBY
+  end
+
   it 'registers an offense and corrects when method arguments are unnecessarily parenthesized' do
     expect_offense(<<~RUBY)
       foo(
@@ -628,14 +1003,12 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   end
 
   context 'pin operator', :ruby31 do
-    let(:target_ruby_version) { 3.1 }
-
     shared_examples 'redundant parentheses' do |variable, description|
       it "registers an offense and corrects #{description}" do
         expect_offense(<<~RUBY, variable: variable)
           var = 0
           foo in { bar: ^(%{variable}) }
-                         ^^{variable}^ Don\x27t use parentheses around a variable.
+                         ^^{variable}^ Don't use parentheses around a variable.
         RUBY
 
         expect_correction(<<~RUBY)
@@ -670,5 +1043,110 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     it_behaves_like 'allowed parentheses', '{ baz: 2 }', 'a hash literal'
     it_behaves_like 'allowed parentheses', '1..2', 'a range literal'
     it_behaves_like 'allowed parentheses', '1', 'an int literal'
+  end
+
+  context 'when `AllowInMultilineConditions: true` of `Style/ParenthesesAroundCondition`' do
+    let(:other_cops) do
+      {
+        'Style/ParenthesesAroundCondition' => {
+          'Enabled' => enabled, 'AllowInMultilineConditions' => true
+        }
+      }
+    end
+
+    context 'when `Style/ParenthesesAroundCondition` is enabled' do
+      let(:enabled) { true }
+
+      context 'when single line conditions' do
+        it_behaves_like 'redundant', '(x && y)', 'x && y', 'a logical expression'
+        it_behaves_like 'redundant', '(x || y)', 'x || y', 'a logical expression'
+        it_behaves_like 'redundant', '(x and y)', 'x and y', 'a logical expression'
+        it_behaves_like 'redundant', '(x or y)', 'x or y', 'a logical expression'
+      end
+
+      context 'when multiline conditions' do
+        it_behaves_like 'plausible', <<~RUBY
+          (x &&
+           y)
+        RUBY
+        it_behaves_like 'plausible', <<~RUBY
+          (x ||
+           y)
+        RUBY
+        it_behaves_like 'plausible', <<~RUBY
+          (x and
+           y)
+        RUBY
+        it_behaves_like 'plausible', <<~RUBY
+          (x or
+           y)
+        RUBY
+      end
+    end
+
+    context 'when `Style/ParenthesesAroundCondition` is disabled' do
+      let(:enabled) { false }
+
+      context 'when single line conditions' do
+        it_behaves_like 'redundant', '(x && y)', 'x && y', 'a logical expression'
+        it_behaves_like 'redundant', '(x || y)', 'x || y', 'a logical expression'
+        it_behaves_like 'redundant', '(x and y)', 'x and y', 'a logical expression'
+        it_behaves_like 'redundant', '(x or y)', 'x or y', 'a logical expression'
+      end
+
+      context 'when multiline conditions' do
+        it 'registers an offense when using `&&`' do
+          expect_offense(<<~RUBY)
+            (x &&
+            ^^^^^ Don't use parentheses around a logical expression.
+             y)
+          RUBY
+
+          expect_correction(<<~RUBY)
+            x &&
+             y
+          RUBY
+        end
+
+        it 'registers an offense when using `||`' do
+          expect_offense(<<~RUBY)
+            (x ||
+            ^^^^^ Don't use parentheses around a logical expression.
+             y)
+          RUBY
+
+          expect_correction(<<~RUBY)
+            x ||
+             y
+          RUBY
+        end
+
+        it 'registers an offense when using `and`' do
+          expect_offense(<<~RUBY)
+            (x and
+            ^^^^^^ Don't use parentheses around a logical expression.
+             y)
+          RUBY
+
+          expect_correction(<<~RUBY)
+            x and
+             y
+          RUBY
+        end
+
+        it 'registers an offense when using `or`' do
+          expect_offense(<<~RUBY)
+            (x or
+            ^^^^^ Don't use parentheses around a logical expression.
+             y)
+          RUBY
+
+          expect_correction(<<~RUBY)
+            x or
+             y
+          RUBY
+        end
+      end
+    end
   end
 end

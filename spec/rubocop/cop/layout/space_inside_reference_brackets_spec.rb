@@ -118,7 +118,7 @@ RSpec.describe RuboCop::Cop::Layout::SpaceInsideReferenceBrackets, :config do
     end
 
     it 'does not register offense for non-empty brackets with newline inside' do
-      expect_no_offenses(<<-RUBY)
+      expect_no_offenses(<<~RUBY)
         foo[
           bar
         ]
@@ -280,7 +280,7 @@ RSpec.describe RuboCop::Cop::Layout::SpaceInsideReferenceBrackets, :config do
       RUBY
     end
 
-    it 'register and correct multiple offenses for multiple sets of ref brackets' do
+    it 'registers and correct multiple offenses for multiple sets of ref brackets' do
       expect_offense(<<~RUBY)
         b[ :key]["foo"  ][   0 ]
           ^ Do not use space inside reference brackets.
@@ -294,7 +294,7 @@ RSpec.describe RuboCop::Cop::Layout::SpaceInsideReferenceBrackets, :config do
       RUBY
     end
 
-    it 'accepts extra spacing in array brackets' do
+    it 'registers an offense when extra spacing in array brackets' do
       expect_offense(<<~RUBY)
         j[ "pop"] = [89, nil, ""    ]
           ^ Do not use space inside reference brackets.

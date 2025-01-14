@@ -160,6 +160,43 @@ RSpec.describe RuboCop::Cop::Metrics::ModuleLength, :config do
       RUBY
     end
 
+    it 'rejects a module with more than 5 lines including its singleton class' do
+      expect_offense(<<~RUBY)
+        module Test
+        ^^^^^^^^^^^ Module has too many lines. [8/5]
+          class << self
+            a = 1
+            a = 2
+            a = 3
+            a = 4
+            a = 5
+            a = 6
+          end
+        end
+      RUBY
+    end
+
+    it 'rejects a module with more than 5 lines that belong to the module directly and including its singleton class' do
+      expect_offense(<<~RUBY)
+        module NamespaceModule
+        ^^^^^^^^^^^^^^^^^^^^^^ Module has too many lines. [13/5]
+          class << self
+            a = 1
+            a = 2
+            a = 3
+            a = 4
+            a = 5
+          end
+          a = 1
+          a = 2
+          a = 3
+          a = 4
+          a = 5
+          a = 6
+        end
+      RUBY
+    end
+
     it 'rejects a module with 6 lines that belong to the module directly' do
       expect_offense(<<~RUBY)
         module NamespaceModule
@@ -186,6 +223,24 @@ RSpec.describe RuboCop::Cop::Metrics::ModuleLength, :config do
           a = 6
         end
       RUBY
+    end
+  end
+
+  context 'with `--lsp` option', :lsp do
+    it 'reports the correct beginning and end lines' do
+      offenses = expect_offense(<<~RUBY)
+        module Test
+        ^^^^^^^^^^^ Module has too many lines. [6/5]
+          a = 1
+          a = 2
+          a = 3
+          a = 4
+          a = 5
+          a = 6
+        end
+      RUBY
+      offense = offenses.first
+      expect(offense.location.last_line).to eq(1)
     end
   end
 

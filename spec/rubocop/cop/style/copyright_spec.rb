@@ -32,6 +32,59 @@ RSpec.describe RuboCop::Cop::Style::Copyright, :config do
     RUBY
   end
 
+  context 'when multiline copyright notice' do
+    let(:cop_config) do
+      {
+        'Notice' => <<~'COPYRIGHT'
+          Copyright (\(c\) )?2015 Acme Inc.
+
+          License details\.\.\.
+        COPYRIGHT
+      }
+    end
+
+    it 'does not register an offense when the multiline copyright notice is present' do
+      cop_config['AutocorrectNotice'] = <<~COPYRIGHT
+        # Copyright (c) 2015 Acme Inc.
+        #
+        # License details...
+      COPYRIGHT
+
+      expect_no_offenses(<<~RUBY)
+        # Copyright 2015 Acme Inc.
+        #
+        # License details...
+        class Foo
+        end
+      RUBY
+    end
+
+    it 'registers an offense when the multiline copyright notice is missing' do
+      cop_config['AutocorrectNotice'] = <<~COPYRIGHT
+        # Copyright (c) 2015 Acme Inc.
+        #
+        # License details...
+      COPYRIGHT
+
+      expect_offense(<<~RUBY)
+        # Comment
+        ^ Include a copyright notice matching [...]
+        class Foo
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        # Copyright (c) 2015 Acme Inc.
+        #
+        # License details...
+
+        # Comment
+        class Foo
+        end
+      RUBY
+    end
+  end
+
   context 'when the copyright notice is missing' do
     let(:source) { <<~RUBY }
       # test
@@ -57,12 +110,12 @@ RSpec.describe RuboCop::Cop::Style::Copyright, :config do
 
     it 'fails to autocorrect when the AutocorrectNotice does not match the Notice pattern' do
       cop_config['AutocorrectNotice'] = '# Copyleft (c) 2015 Acme Inc.'
-      expect { expect_offense(source) }.to raise_error(RuboCop::Warning)
+      expect { expect_offense(source) }.to raise_error(RuboCop::Warning, %r{Style/Copyright:})
     end
 
     it 'fails to autocorrect if no AutocorrectNotice is given' do
-      # cop_config['AutocorrectNotice'] = '# Copyleft (c) 2015 Acme Inc.'
-      expect { expect_offense(source) }.to raise_error(RuboCop::Warning)
+      cop_config['AutocorrectNotice'] = nil
+      expect { expect_offense(source) }.to raise_error(RuboCop::Warning, %r{Style/Copyright:})
     end
   end
 
@@ -93,12 +146,10 @@ RSpec.describe RuboCop::Cop::Style::Copyright, :config do
       cop_config['AutocorrectNotice'] = '# Copyright (c) 2015 Acme Inc.'
 
       expect_offense(<<~RUBY)
-        ^ Include a copyright notice matching [...]
+        ^{} Include a copyright notice matching [...]
       RUBY
 
-      expect_correction(<<~RUBY)
-        # Copyright (c) 2015 Acme Inc.
-      RUBY
+      expect_no_corrections
     end
   end
 

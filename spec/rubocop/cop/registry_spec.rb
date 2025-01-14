@@ -17,11 +17,11 @@ RSpec.describe RuboCop::Cop::Registry do
   let(:options) { {} }
 
   before do
-    stub_const('RuboCop::Cop::Test::FirstArrayElementIndentation', Class.new(RuboCop::Cop::Cop))
-    stub_const('RuboCop::Cop::RSpec::Foo', Class.new(RuboCop::Cop::Cop))
+    stub_const('RuboCop::Cop::Test::FirstArrayElementIndentation', Class.new(RuboCop::Cop::Base))
+    stub_const('RuboCop::Cop::RSpec::Foo', Class.new(RuboCop::Cop::Base))
   end
 
-  # `RuboCop::Cop::Cop` mutates its `registry` when inherited from.
+  # `RuboCop::Cop::Base` mutates its `registry` when inherited from.
   # This can introduce nondeterministic failures in other parts of the
   # specs if this mutation occurs before code that depends on this global cop
   # store. The workaround is to replace the global cop store with a temporary
@@ -32,8 +32,8 @@ RSpec.describe RuboCop::Cop::Registry do
     klass = RuboCop::Cop::Metrics::AbcSize
     copy = registry.dup
     copy.enlist(klass)
-    expect(copy.cops.include?(klass)).to be(true)
-    expect(registry.cops.include?(klass)).to be(false)
+    expect(copy.cops).to include(klass)
+    expect(registry.cops).not_to include(klass)
   end
 
   context 'when dismissing a cop class' do
@@ -43,19 +43,19 @@ RSpec.describe RuboCop::Cop::Registry do
 
     it 'allows it if done rapidly' do
       registry.dismiss(cop_class)
-      expect(registry.cops.include?(cop_class)).to be(false)
+      expect(registry.cops).not_to include(cop_class)
     end
 
     it 'disallows it if done too late' do
-      expect(registry.cops.include?(cop_class)).to be(true)
+      expect(registry.cops).to include(cop_class)
       expect { registry.dismiss(cop_class) }.to raise_error(RuntimeError)
     end
 
     it 'allows re-listing' do
       registry.dismiss(cop_class)
-      expect(registry.cops.include?(cop_class)).to be(false)
+      expect(registry.cops).not_to include(cop_class)
       registry.enlist(cop_class)
-      expect(registry.cops.include?(cop_class)).to be(true)
+      expect(registry.cops).to include(cop_class)
     end
   end
 
@@ -78,7 +78,7 @@ RSpec.describe RuboCop::Cop::Registry do
     end
 
     it 'returns false for cops not included in the store' do
-      expect(registry.contains_cop_matching?(['Style/NotReal'])).to be(false)
+      expect(registry).not_to be_contains_cop_matching(['Style/NotReal'])
     end
   end
 
@@ -114,7 +114,7 @@ RSpec.describe RuboCop::Cop::Registry do
 
     it 'emits a warning when namespace is incorrect' do
       warning = '/app/.rubocop.yml: Style/MethodLength has the wrong ' \
-                "namespace - should be Metrics\n"
+                "namespace - replace it with Metrics/MethodLength\n"
       qualified = nil
 
       expect do
@@ -124,18 +124,34 @@ RSpec.describe RuboCop::Cop::Registry do
       expect(qualified).to eql('Metrics/MethodLength')
     end
 
-    it 'raises an error when a cop name is ambiguous' do
-      cop_name = 'FirstArrayElementIndentation'
-      expect { registry.qualified_cop_name(cop_name, origin) }
-        .to raise_error(RuboCop::Cop::AmbiguousCopName)
-        .with_message(
-          'Ambiguous cop name `FirstArrayElementIndentation` used in ' \
-          '/app/.rubocop.yml needs department qualifier. Did you mean ' \
-          'Layout/FirstArrayElementIndentation or ' \
-          'Test/FirstArrayElementIndentation?'
-        )
-        .and output('/app/.rubocop.yml: Warning: no department given for ' \
-                    "FirstArrayElementIndentation.\n").to_stderr
+    context 'when cops share the same class name' do
+      let(:cops) do
+        [
+          RuboCop::Cop::Test::SameNameInMultipleNamespace,
+          RuboCop::Cop::Test::Foo::SameNameInMultipleNamespace,
+          RuboCop::Cop::Test::Bar::SameNameInMultipleNamespace
+        ]
+      end
+
+      it 'raises an error when a cop name is ambiguous' do
+        cop_name = 'SameNameInMultipleNamespace'
+        expect { registry.qualified_cop_name(cop_name, origin) }
+          .to raise_error(RuboCop::Cop::AmbiguousCopName)
+          .with_message(
+            'Ambiguous cop name `SameNameInMultipleNamespace` used in ' \
+            '/app/.rubocop.yml needs department qualifier. Did you mean ' \
+            'Test/SameNameInMultipleNamespace or ' \
+            'Test/Foo/SameNameInMultipleNamespace or ' \
+            'Test/Bar/SameNameInMultipleNamespace?'
+          )
+          .and output('/app/.rubocop.yml: Warning: no department given for ' \
+                      "SameNameInMultipleNamespace.\n").to_stderr
+      end
+
+      it 'qualifies names when the cop is unambiguous' do
+        qualified = registry.qualified_cop_name('Test/SameNameInMultipleNamespace', origin)
+        expect(qualified).to eql('Test/SameNameInMultipleNamespace')
+      end
     end
 
     it 'returns the provided name if no namespace is found' do
@@ -172,7 +188,9 @@ RSpec.describe RuboCop::Cop::Registry do
       end
 
       it 'exposes both cops' do
-        expect(registry.cops).to match_array([RuboCop::Cop::Foo::Bar, RuboCop::Cop::Baz::Foo::Bar])
+        expect(registry.cops).to contain_exactly(
+          RuboCop::Cop::Foo::Bar, RuboCop::Cop::Baz::Foo::Bar
+        )
       end
     end
   end
@@ -202,14 +220,14 @@ RSpec.describe RuboCop::Cop::Registry do
 
     it 'selects only safe cops if :safe passed' do
       options[:safe] = true
-      expect(enabled_cops.include?(RuboCop::Cop::RSpec::Foo)).to be(false)
+      expect(enabled_cops).not_to include(RuboCop::Cop::RSpec::Foo)
     end
 
     context 'when new cops are introduced' do
       let(:config) { RuboCop::Config.new('Lint/BooleanSymbol' => { 'Enabled' => 'pending' }) }
 
       it 'does not include them' do
-        expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(false)
+        expect(enabled_cops).not_to include(RuboCop::Cop::Lint::BooleanSymbol)
       end
 
       it 'overrides config if :only includes the cop' do
@@ -221,7 +239,7 @@ RSpec.describe RuboCop::Cop::Registry do
         let(:options) { { disable_pending_cops: true } }
 
         it 'does not include them' do
-          expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(false)
+          expect(enabled_cops).not_to include(RuboCop::Cop::Lint::BooleanSymbol)
         end
 
         context 'when specifying `NewCops: enable` option in .rubocop.yml' do
@@ -234,7 +252,7 @@ RSpec.describe RuboCop::Cop::Registry do
 
           it 'does not include them because command-line option takes ' \
              'precedence over .rubocop.yml' do
-            expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(false)
+            expect(enabled_cops).not_to include(RuboCop::Cop::Lint::BooleanSymbol)
           end
         end
       end
@@ -243,7 +261,7 @@ RSpec.describe RuboCop::Cop::Registry do
         let(:options) { { enable_pending_cops: true } }
 
         it 'includes them' do
-          expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(true)
+          expect(enabled_cops).to include(RuboCop::Cop::Lint::BooleanSymbol)
         end
 
         context 'when specifying `NewCops: disable` option in .rubocop.yml' do
@@ -255,7 +273,7 @@ RSpec.describe RuboCop::Cop::Registry do
           end
 
           it 'includes them because command-line option takes precedence over .rubocop.yml' do
-            expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(true)
+            expect(enabled_cops).to include(RuboCop::Cop::Lint::BooleanSymbol)
           end
         end
       end
@@ -269,7 +287,7 @@ RSpec.describe RuboCop::Cop::Registry do
         end
 
         it 'does not include them' do
-          expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(false)
+          expect(enabled_cops).not_to include(RuboCop::Cop::Lint::BooleanSymbol)
         end
       end
 
@@ -282,7 +300,7 @@ RSpec.describe RuboCop::Cop::Registry do
         end
 
         it 'does not include them' do
-          expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(false)
+          expect(enabled_cops).not_to include(RuboCop::Cop::Lint::BooleanSymbol)
         end
       end
 
@@ -295,7 +313,7 @@ RSpec.describe RuboCop::Cop::Registry do
         end
 
         it 'includes them' do
-          expect(enabled_cops.include?(RuboCop::Cop::Lint::BooleanSymbol)).to be(true)
+          expect(enabled_cops).to include(RuboCop::Cop::Lint::BooleanSymbol)
         end
       end
     end
@@ -316,11 +334,11 @@ RSpec.describe RuboCop::Cop::Registry do
 
   describe '#department?' do
     it 'returns true for department name' do
-      expect(registry.department?('Lint')).to be true
+      expect(registry).to be_department('Lint')
     end
 
     it 'returns false for other names' do
-      expect(registry.department?('Foo')).to be false
+      expect(registry).not_to be_department('Foo')
     end
   end
 

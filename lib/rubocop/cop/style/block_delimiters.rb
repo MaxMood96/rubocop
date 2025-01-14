@@ -176,10 +176,15 @@ module RuboCop
 
         BRACES_REQUIRED_MESSAGE = "Brace delimiters `{...}` required for '%<method_name>s' method."
 
+        def self.autocorrect_incompatible_with
+          [Style::RedundantBegin]
+        end
+
         def on_send(node)
           return unless node.arguments?
           return if node.parenthesized?
-          return if node.operator_method? || node.assignment_method?
+          return if node.assignment_method?
+          return if single_argument_operator_method?(node)
 
           node.arguments.each do |arg|
             get_blocks(arg) do |block|
@@ -190,6 +195,7 @@ module RuboCop
             end
           end
         end
+        alias on_csend on_send
 
         def on_block(node)
           return if ignored_node?(node)
@@ -299,11 +305,26 @@ module RuboCop
 
         def move_comment_before_block(corrector, comment, block_node, closing_brace)
           range = block_node.chained? ? end_of_chain(block_node.parent).source_range : closing_brace
-          corrector.remove(range_with_surrounding_space(comment.loc.expression, side: :right))
-          remove_trailing_whitespace(corrector, range, comment)
-          corrector.insert_after(range, "\n")
+
+          # It is possible that there is code between the block and the comment
+          # which needs to be preserved and trimmed.
+          pre_comment_range = source_range_before_comment(range, comment)
+
+          corrector.remove(range_with_surrounding_space(comment.source_range, side: :right))
+          remove_trailing_whitespace(corrector, pre_comment_range, comment)
+          corrector.insert_after(pre_comment_range, "\n")
 
           corrector.insert_before(block_node, "#{comment.text}\n")
+        end
+
+        def source_range_before_comment(range, comment)
+          range = range.end.join(comment.source_range.begin)
+
+          # End the range before any whitespace that precedes the comment
+          trailing_whitespace_count = range.source[/\s+\z/]&.length
+          range = range.adjust(end_pos: -trailing_whitespace_count) if trailing_whitespace_count
+
+          range
         end
 
         def end_of_chain(node)
@@ -314,7 +335,7 @@ module RuboCop
         end
 
         def remove_trailing_whitespace(corrector, range, comment)
-          range_of_trailing = range.end.join(comment.loc.expression.begin)
+          range_of_trailing = range.end.join(comment.source_range.begin)
 
           corrector.remove(range_of_trailing) if range_of_trailing.source.match?(/\A\s+\z/)
         end
@@ -323,16 +344,23 @@ module RuboCop
           node.respond_to?(:block_node) && node.block_node
         end
 
+        # rubocop:disable Metrics/CyclomaticComplexity
         def get_blocks(node, &block)
           case node.type
           when :block, :numblock
             yield node
-          when :send
+          when :send, :csend
+            # When a method has an argument which is another method with a block,
+            # that block needs braces, otherwise a syntax error will be introduced
+            # for subsequent arguments.
+            # Additionally, even without additional arguments, changing `{...}` to
+            # `do...end` will change the binding of the block to the outer method.
             get_blocks(node.receiver, &block) if node.receiver
+            node.arguments.each { |argument| get_blocks(argument, &block) }
           when :hash
             # A hash which is passed as method argument may have no braces
             # In that case, one of the K/V pairs could contain a block node
-            # which could change in meaning if do...end replaced {...}
+            # which could change in meaning if `do...end` is replaced with `{...}`
             return if node.braces?
 
             node.each_child_node { |child| get_blocks(child, &block) }
@@ -340,8 +368,10 @@ module RuboCop
             node.each_child_node { |child| get_blocks(child, &block) }
           end
         end
+        # rubocop:enable Metrics/CyclomaticComplexity
 
         def proper_block_style?(node)
+          return true if require_do_end?(node)
           return special_method_proper_block_style?(node) if special_method?(node.method_name)
 
           case style
@@ -350,6 +380,13 @@ module RuboCop
           when :braces_for_chaining then braces_for_chaining_style?(node)
           when :always_braces       then braces_style?(node)
           end
+        end
+
+        def require_do_end?(node)
+          return false if node.braces? || node.multiline?
+          return false unless (resbody = node.each_descendant(:resbody).first)
+
+          resbody.children.first&.array_type?
         end
 
         def special_method?(method_name)
@@ -361,7 +398,8 @@ module RuboCop
         def special_method_proper_block_style?(node)
           method_name = node.method_name
           return true if allowed_method?(method_name) || matches_allowed_pattern?(method_name)
-          return node.braces? if braces_required_method?(method_name)
+
+          node.braces? if braces_required_method?(method_name)
         end
 
         def braces_required_method?(method_name)
@@ -402,7 +440,7 @@ module RuboCop
         end
 
         def correction_would_break_code?(node)
-          return unless node.keywords?
+          return false unless node.keywords?
 
           node.send_node.arguments? && !node.send_node.parenthesized?
         end
@@ -424,7 +462,7 @@ module RuboCop
         end
 
         def return_value_used?(node)
-          return unless node.parent
+          return false unless node.parent
 
           # If there are parentheses around the block, check if that
           # is being used.
@@ -436,14 +474,14 @@ module RuboCop
         end
 
         def return_value_of_scope?(node)
-          return unless node.parent
+          return false unless node.parent
 
           conditional?(node.parent) || array_or_range?(node.parent) ||
             node.parent.children.last == node
         end
 
         def conditional?(node)
-          node.if_type? || node.or_type? || node.and_type?
+          node.if_type? || node.operator_keyword?
         end
 
         def array_or_range?(node)
@@ -454,6 +492,12 @@ module RuboCop
           # If the block contains `rescue` or `ensure`, it needs to be wrapped in
           # `begin`...`end` when changing `do-end` to `{}`.
           block_node.each_child_node(:rescue, :ensure).any? && !block_node.single_line?
+        end
+
+        def single_argument_operator_method?(node)
+          return false unless node.operator_method?
+
+          node.arguments.one? && node.first_argument.block_type?
         end
       end
     end

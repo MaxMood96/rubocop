@@ -267,6 +267,21 @@ RSpec.describe RuboCop::Cop::Layout::ExtraSpacing, :config do
         end
       end
     end
+
+    it 'registers an offense and corrects when a character is vertically aligned' do
+      expect_offense(<<~RUBY)
+        d_is_vertically_aligned  do
+                               ^ Unnecessary spacing detected.
+          _______________________d
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        d_is_vertically_aligned do
+          _______________________d
+        end
+      RUBY
+    end
   end
 
   context 'when AllowForAlignment is false' do
@@ -290,10 +305,6 @@ RSpec.describe RuboCop::Cop::Layout::ExtraSpacing, :config do
     let(:cop_config) do
       { 'AllowForAlignment' => allow_alignment,
         'AllowBeforeTrailingComments' => allow_comments }
-    end
-    let(:src_with_extra) do
-      ['  object.method(argument)  # this is a comment',
-       '                         ^ Unnecessary spacing detected.']
     end
 
     context 'true' do
@@ -346,7 +357,7 @@ RSpec.describe RuboCop::Cop::Layout::ExtraSpacing, :config do
     context 'false' do
       let(:allow_comments) { false }
 
-      it 'regsiters offense' do
+      it 'registers offense' do
         expect_offense(<<~RUBY)
           object.method(argument)  # this is a comment
                                  ^ Unnecessary spacing detected.
@@ -450,7 +461,7 @@ RSpec.describe RuboCop::Cop::Layout::ExtraSpacing, :config do
       RUBY
     end
 
-    it 'register offenses and correct consecutive operator assignments which are not aligned' do
+    it 'registers offenses and correct consecutive operator assignments which are not aligned' do
       expect_offense(<<~RUBY)
         a += 1
         bb = 2
@@ -501,7 +512,7 @@ RSpec.describe RuboCop::Cop::Layout::ExtraSpacing, :config do
       RUBY
     end
 
-    it 'register offenses and correct consecutive attribute assignments which are not aligned' do
+    it 'registers offenses and correct consecutive attribute assignments which are not aligned' do
       expect_offense(<<~RUBY)
         a.attr = 1
         bb &&= 2
@@ -527,7 +538,7 @@ RSpec.describe RuboCop::Cop::Layout::ExtraSpacing, :config do
       RUBY
     end
 
-    it 'register offenses and correct complex nested assignments' do
+    it 'registers offenses and correct complex nested assignments' do
       expect_offense(<<~RUBY)
         def batch
           @areas = params[:param].map {
@@ -588,6 +599,99 @@ RSpec.describe RuboCop::Cop::Layout::ExtraSpacing, :config do
       expect_no_offenses(<<~RUBY)
         def method(arg = 1)
           var = arg
+        end
+      RUBY
+    end
+
+    it 'registers an offense and corrects when there is = in a string after assignment' do
+      expect_offense(<<~RUBY)
+        e, f = val.split('=')
+        opt.ssh_config[e] = f
+                          ^ `=` is not aligned with the preceding assignment.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        e, f              = val.split('=')
+        opt.ssh_config[e] = f
+      RUBY
+    end
+
+    it 'registers an offense and corrects with op-asgn when there is = in a string after assignment' do
+      expect_offense(<<~RUBY)
+        xy &&= val.split('=')
+        opt.ssh_config[e] = f
+                          ^ `=` is not aligned with the preceding assignment.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        xy              &&= val.split('=')
+        opt.ssh_config[e] = f
+      RUBY
+    end
+  end
+
+  context 'when exactly two comments have extra spaces' do
+    context 'and they are aligned' do
+      it 'does not register an offense' do
+        expect_no_offenses(<<~RUBY)
+          one  # comment one
+          two  # comment two
+        RUBY
+      end
+    end
+
+    context 'and they are not aligned' do
+      it 'registers an offense' do
+        expect_offense(<<~RUBY)
+          one  # comment one
+             ^ Unnecessary spacing detected.
+          two   # comment two
+             ^^ Unnecessary spacing detected.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          one # comment one
+          two # comment two
+        RUBY
+      end
+    end
+  end
+
+  context 'when multiple comments have extra spaces' do
+    it 'registers offenses for all comments' do
+      expect_offense(<<~RUBY)
+        class Foo
+          def require(p)  # rubocop:disable Naming/MethodParameterName
+                        ^ Unnecessary spacing detected.
+          end
+
+          def load(p)  # rubocop:disable Naming/MethodParameterName
+                     ^ Unnecessary spacing detected.
+          end
+
+          def join(*ps)  # rubocop:disable Naming/MethodParameterName
+                       ^ Unnecessary spacing detected.
+          end
+
+          def exist?(*ps)  # rubocop:disable Naming/MethodParameterName
+                         ^ Unnecessary spacing detected.
+          end
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        class Foo
+          def require(p) # rubocop:disable Naming/MethodParameterName
+          end
+
+          def load(p) # rubocop:disable Naming/MethodParameterName
+          end
+
+          def join(*ps) # rubocop:disable Naming/MethodParameterName
+          end
+
+          def exist?(*ps) # rubocop:disable Naming/MethodParameterName
+          end
         end
       RUBY
     end

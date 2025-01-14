@@ -148,6 +148,14 @@ RSpec.describe RuboCop::Cop::Naming::BlockForwarding, :config do
         RUBY
       end
 
+      it 'does not register an offense when method just returns the block argument' do
+        expect_no_offenses(<<~RUBY)
+          def foo(&block)
+            block
+          end
+        RUBY
+      end
+
       it 'does not register an offense when defining without block argument method' do
         expect_no_offenses(<<~RUBY)
           def foo(arg1, arg2)
@@ -158,7 +166,7 @@ RSpec.describe RuboCop::Cop::Naming::BlockForwarding, :config do
       it 'does not register an offense when defining kwarg with block args method' do
         # Prevents the following syntax error:
         #
-        # % ruby -cve 'def foo(k:, &); bar(&); end'
+        # $ ruby -cve 'def foo(k:, &); bar(&); end'
         # ruby 3.1.0dev (2021-12-05T10:23:42Z master 19f037e452) [x86_64-darwin19]
         # -e:1: no anonymous block parameter
         #
@@ -172,13 +180,108 @@ RSpec.describe RuboCop::Cop::Naming::BlockForwarding, :config do
       it 'does not register an offense when defining kwoptarg with block args method' do
         # Prevents the following syntax error:
         #
-        # % ruby -cve 'def foo(k: v, &); bar(&); end'
+        # $ ruby -cve 'def foo(k: v, &); bar(&); end'
         # ruby 3.1.0dev (2021-12-05T10:23:42Z master 19f037e452) [x86_64-darwin19]
         # -e:1: no anonymous block parameter
         #
         expect_no_offenses(<<~RUBY)
           def foo(k: v, &block)
             bar(&block)
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when using explicit block forwarding in block method' do
+        # Prevents the following syntax error:
+        #
+        # # foo.rb
+        # def foo(&)
+        #   block_method do
+        #     bar(&)
+        #   end
+        # end
+        #
+        # $ ruby -vc foo.rb
+        # ruby 3.3.0 (2023-12-25 revision 5124f9ac75) [x86_64-darwin22]
+        # foo.rb: foo.rb:4: anonymous block parameter is also used within block (SyntaxError)
+        #
+        expect_no_offenses(<<~RUBY)
+          def foo(&block)
+            block_method do
+              bar(&block)
+            end
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when using explicit block forwarding in numbered block method' do
+        # Prevents the following syntax error:
+        #
+        # # foo.rb
+        # def foo(&)
+        #   block_method do
+        #     bar(&)
+        #   end
+        # end
+        #
+        # $ ruby -vc foo.rb
+        # ruby 3.3.0 (2023-12-25 revision 5124f9ac75) [x86_64-darwin22]
+        # foo.rb: foo.rb:4: anonymous block parameter is also used within block (SyntaxError)
+        #
+        expect_no_offenses(<<~RUBY)
+          def foo(&block)
+            block_method do
+              bar(&block)
+              baz(_1)
+            end
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when using explicit block forwarding in block method and after' do
+        # Prevents the following syntax error:
+        #
+        # # foo.rb
+        # def foo(&)
+        #   block_method do
+        #     bar(&)
+        #   end
+        # end
+        #
+        # $ ruby -vc foo.rb
+        # ruby 3.3.0 (2023-12-25 revision 5124f9ac75) [x86_64-darwin22]
+        # foo.rb: foo.rb:4: anonymous block parameter is also used within block (SyntaxError)
+        #
+        expect_no_offenses(<<~RUBY)
+          def foo(&block)
+            block_method do
+              bar(&block)
+            end
+            baz(&block)
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when using explicit block forwarding in block method and before' do
+        # Prevents the following syntax error:
+        #
+        # # foo.rb
+        # def foo(&)
+        #   block_method do
+        #     bar(&)
+        #   end
+        # end
+        #
+        # $ ruby -vc foo.rb
+        # ruby 3.3.0 (2023-12-25 revision 5124f9ac75) [x86_64-darwin22]
+        # foo.rb: foo.rb:4: anonymous block parameter is also used within block (SyntaxError)
+        #
+        expect_no_offenses(<<~RUBY)
+          def foo(&block)
+            bar(&block)
+            block_method do
+              baz(&block)
+            end
           end
         RUBY
       end
@@ -205,7 +308,7 @@ RSpec.describe RuboCop::Cop::Naming::BlockForwarding, :config do
       end
     end
 
-    context 'Ruby < 3.0', :ruby30 do
+    context 'Ruby < 3.0', :ruby30, unsupported_on: :prism do
       it 'does not register an offense when not using anonymous block forwarding' do
         expect_no_offenses(<<~RUBY)
           def foo(&block)

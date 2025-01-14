@@ -136,7 +136,7 @@ module RuboCop
 
         private
 
-        # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def check_branches(node, branches)
           # return if any branch is empty. An empty branch can be an `if`
           # without an `else` or a branch that contains only comments.
@@ -149,22 +149,50 @@ module RuboCop
                     branches.any? { |branch| single_child_branch?(branch) }
 
           heads = branches.map { |branch| head(branch) }
-          check_expressions(node, heads, :before_condition) if duplicated_expressions?(node, heads)
+
+          return unless duplicated_expressions?(node, heads)
+
+          condition_variable = assignable_condition_value(node)
+
+          head = heads.first
+          if head.respond_to?(:assignment?) && head.assignment?
+            # The `send` node is used instead of the `indexasgn` node, so `name` cannot be used.
+            # https://github.com/rubocop/rubocop-ast/blob/v1.29.0/lib/rubocop/ast/node/indexasgn_node.rb
+            #
+            # FIXME: It would be better to update `RuboCop::AST::OpAsgnNode` or its subclasses to
+            # handle `self.foo ||= value` as a solution, instead of using `head.node_parts[0].to_s`.
+            assigned_value = head.send_type? ? head.receiver.source : head.node_parts[0].to_s
+
+            return if condition_variable == assigned_value
+          end
+
+          check_expressions(node, heads, :before_condition)
         end
-        # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
         def duplicated_expressions?(node, expressions)
           unique_expressions = expressions.uniq
           return false unless expressions.size >= 1 && unique_expressions.one?
 
           unique_expression = unique_expressions.first
-          return true unless unique_expression.assignment?
+          return true unless unique_expression&.assignment?
 
           lhs = unique_expression.child_nodes.first
           node.condition.child_nodes.none? { |n| n.source == lhs.source if n.variable? }
         end
 
-        def check_expressions(node, expressions, insert_position) # rubocop:disable Metrics/MethodLength
+        def assignable_condition_value(node)
+          if node.condition.call_type?
+            (receiver = node.condition.receiver) ? receiver.source : node.condition.source
+          elsif node.condition.variable?
+            node.condition.source
+          end
+        end
+
+        # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
+        def check_expressions(node, expressions, insert_position)
+          return if expressions.any?(&:nil?)
+
           inserted_expression = false
 
           expressions.each do |expression|
@@ -184,6 +212,7 @@ module RuboCop
             end
           end
         end
+        # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
         def last_child_of_parent?(node)
           return true unless (parent = node.parent)

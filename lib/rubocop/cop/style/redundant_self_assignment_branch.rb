@@ -23,7 +23,6 @@ module RuboCop
       #   foo = bar unless condition
       #
       class RedundantSelfAssignmentBranch < Base
-        include RangeHelp
         extend AutoCorrector
 
         MSG = 'Remove the self-assignment branch.'
@@ -34,16 +33,17 @@ module RuboCop
         PATTERN
 
         def on_lvasgn(node)
-          variable, expression = *node
+          expression = node.expression
+
           return unless use_if_and_else_branch?(expression)
 
           if_branch = expression.if_branch
           else_branch = expression.else_branch
           return if inconvertible_to_modifier?(if_branch, else_branch)
 
-          if self_assign?(variable, if_branch)
+          if self_assign?(node.name, if_branch)
             register_offense(expression, if_branch, else_branch, 'unless')
-          elsif self_assign?(variable, else_branch)
+          elsif self_assign?(node.name, else_branch)
             register_offense(expression, else_branch, if_branch, 'if')
           end
         end
@@ -62,7 +62,9 @@ module RuboCop
         end
 
         def multiple_statements?(branch)
-          branch && branch.children.compact.count > 1
+          return false unless branch&.begin_type?
+
+          !branch.children.empty?
         end
 
         def self_assign?(variable, branch)
@@ -73,6 +75,11 @@ module RuboCop
           add_offense(offense_branch) do |corrector|
             assignment_value = opposite_branch ? opposite_branch.source : 'nil'
             replacement = "#{assignment_value} #{keyword} #{if_node.condition.source}"
+            if opposite_branch.respond_to?(:heredoc?) && opposite_branch.heredoc?
+              replacement += opposite_branch.loc.heredoc_end.with(
+                begin_pos: opposite_branch.source_range.end_pos
+              ).source
+            end
 
             corrector.replace(if_node, replacement)
           end

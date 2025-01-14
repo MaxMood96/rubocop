@@ -4,24 +4,22 @@ module RuboCop
   module Cop
     module Style
       # Enforces the presence (default) or absence of parentheses in
-      # method calls containing parameters.
+      # method calls containing arguments.
       #
       # In the default style (require_parentheses), macro methods are allowed.
-      # Additional methods can be added to the `AllowedMethods`
-      # or `AllowedPatterns` list. These options are
-      # valid only in the default style. Macros can be included by
-      # either setting `IgnoreMacros` to false or adding specific macros to
-      # the `IncludedMacros` list.
+      # Additional methods can be added to the `AllowedMethods` or
+      # `AllowedPatterns` list. These options are valid only in the default
+      # style. Macros can be included by either setting `IgnoreMacros` to false
+      # or adding specific macros to the `IncludedMacros` list.
       #
-      # Precedence of options is all follows:
+      # Precedence of options is as follows:
       #
       # 1. `AllowedMethods`
       # 2. `AllowedPatterns`
       # 3. `IncludedMacros`
       #
-      # eg. If a method is listed in both
-      # `IncludedMacros` and `AllowedMethods`, then the latter takes
-      # precedence (that is, the method is allowed).
+      # If a method is listed in both `IncludedMacros` and `AllowedMethods`,
+      # then the latter takes precedence (that is, the method is allowed).
       #
       # In the alternative style (omit_parentheses), there are three additional
       # options.
@@ -40,14 +38,31 @@ module RuboCop
       #     to `true` allows the presence of parentheses in such a method call
       #     even with arguments.
       #
-      # NOTE: Parentheses are still allowed in cases where omitting them
-      # results in ambiguous or syntactically incorrect code. For example,
-      # parentheses are required around a method with arguments when inside an
-      # endless method definition introduced in Ruby 3.0. Parentheses are also
-      # allowed when forwarding arguments with the triple-dot syntax introduced
-      # in Ruby 2.7 as omitting them starts an endless range.
-      # And Ruby 3.1's hash omission syntax has a case that requires parentheses
-      # because of the following issue: https://bugs.ruby-lang.org/issues/18396.
+      # NOTE: The style of `omit_parentheses` allows parentheses in cases where
+      # omitting them results in ambiguous or syntactically incorrect code.
+      #
+      # Non-exhaustive list of examples:
+      #
+      # - Parentheses are required allowed in method calls with arguments inside
+      #   literals, logical operators, setting default values in position and
+      #   keyword arguments, chaining and more.
+      # - Parentheses are allowed in method calls with arguments inside
+      #   operators to avoid ambiguity.
+      #   triple-dot syntax introduced in Ruby 2.7 as omitting them starts an
+      #   endless range.
+      # - Parentheses are allowed when forwarding arguments with the
+      #   triple-dot syntax introduced in Ruby 2.7 as omitting them starts an
+      #   endless range.
+      # - Parentheses are required in calls with arguments when inside an
+      #   endless method definition introduced in Ruby 3.0.
+      # - Ruby 3.1's hash omission syntax allows parentheses if the method call
+      #   is in conditionals and requires parentheses if the call
+      #   is not the value-returning expression. See
+      #   https://bugs.ruby-lang.org/issues/18396.
+      # - Parentheses are required in anonymous arguments, keyword arguments
+      #   and block passing in Ruby 3.2.
+      # - Parentheses are required when the first argument is a beginless range or
+      #   the last argument is an endless range.
       #
       # @example EnforcedStyle: require_parentheses (default)
       #
@@ -80,34 +95,28 @@ module RuboCop
       #   array.delete e
       #
       #   # bad
-      #   foo.enforce(strict: true)
+      #   action.enforce(strict: true)
       #
       #   # good
-      #   foo.enforce strict: true
+      #   action.enforce strict: true
       #
       #   # good
-      #   # Allows parens for calls that won't produce valid Ruby or be ambiguous.
-      #   model.validate strict(true)
+      #   # Parentheses are allowed for code that can be ambiguous without
+      #   # them.
+      #   action.enforce(condition) || other_condition
       #
       #   # good
-      #   # Allows parens for calls that won't produce valid Ruby or be ambiguous.
+      #   # Parentheses are allowed for calls that won't produce valid Ruby
+      #   # without them.
       #   yield path, File.basename(path)
       #
       #   # good
-      #   # Operators methods calls with parens
-      #   array&.[](index)
-      #
-      #   # good
-      #   # Operators methods without parens, if you prefer
-      #   array.[] index
-      #
-      #   # good
-      #   # Operators methods calls with parens
-      #   array&.[](index)
-      #
-      #   # good
-      #   # Operators methods without parens, if you prefer
-      #   array.[] index
+      #   # Omitting the parentheses in Ruby 3.1 hash omission syntax can lead
+      #   # to ambiguous code. We allow them in conditionals and non-last
+      #   # expressions. See https://bugs.ruby-lang.org/issues/18396
+      #   if meets(criteria:, action:)
+      #     safe_action(action) || dangerous_action(action)
+      #   end
       #
       # @example IgnoreMacros: true (default)
       #
@@ -211,28 +220,26 @@ module RuboCop
           send(style, node) # call require_parentheses or omit_parentheses
         end
         alias on_csend on_send
-        alias on_super on_send
         alias on_yield on_send
 
         private
 
         def args_begin(node)
           loc = node.loc
-          selector =
-            node.super_type? || node.yield_type? ? loc.keyword : loc.selector
+          selector = node.yield_type? ? loc.keyword : loc.selector
 
           resize_by = args_parenthesized?(node) ? 2 : 1
           selector.end.resize(resize_by)
         end
 
         def args_end(node)
-          node.loc.expression.end
+          node.source_range.end
         end
 
         def args_parenthesized?(node)
           return false unless node.arguments.one?
 
-          first_node = node.arguments.first
+          first_node = node.first_argument
           first_node.begin_type? && first_node.parenthesized_call?
         end
       end

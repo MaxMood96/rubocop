@@ -231,7 +231,7 @@ module RuboCop
           cop_names = cops.sort.map { |c| describe(c) }.join(', ')
 
           add_offense(location, message: message(cop_names)) do |corrector|
-            range = comment_range_with_surrounding_space(location, comment.loc.expression)
+            range = comment_range_with_surrounding_space(location, comment.source_range)
 
             if leave_free_comment?(comment, range)
               corrector.replace(range, ' # ')
@@ -263,8 +263,8 @@ module RuboCop
 
         def cop_range(comment, cop)
           cop = remove_department_marker(cop)
-          matching_range(comment.loc.expression, cop) ||
-            matching_range(comment.loc.expression, Badge.parse(cop).cop_name) ||
+          matching_range(comment.source_range, cop) ||
+            matching_range(comment.source_range, Badge.parse(cop).cop_name) ||
             raise("Couldn't find #{cop} in comment: #{comment.text}")
         end
 
@@ -281,7 +281,7 @@ module RuboCop
             .drop_while { |r| !r.equal?(range) }
             .each_cons(2)
             .map { |range1, range2| range1.end.join(range2.begin).source }
-            .all? { |intervening| /\A\s*,\s*\Z/.match?(intervening) }
+            .all?(/\A\s*,\s*\z/)
         end
 
         SIMILAR_COP_NAMES_CACHE = Hash.new do |hash, cop_name|

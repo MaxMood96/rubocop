@@ -33,13 +33,18 @@ module RuboCop
             current = node.source
 
             add_offense(node, message: format(MSG, prefer: prefer, current: current)) do |corrector|
+              next if part_of_ignored_node?(node)
+
               opposite_style_detected
               corrector.replace(node, prefer)
+
+              ignore_node(node)
             end
           else
             correct_style_detected
           end
         end
+        alias on_csend on_send
 
         private
 
@@ -50,9 +55,10 @@ module RuboCop
         def prefer(node)
           receiver = node.receiver.source
           arguments = node.arguments.map(&:source).join(', ')
+          dot = node.loc.dot.source
           method = explicit_style? ? "call(#{arguments})" : "(#{arguments})"
 
-          "#{receiver}.#{method}"
+          "#{receiver}#{dot}#{method}"
         end
 
         def implicit_style?

@@ -78,7 +78,6 @@ RSpec.describe 'RuboCop::CLI SuggestExtensions', :isolated_environment do # rubo
       end
     end
 
-    let(:cop_class) { RuboCop::Cop::Base }
     let(:loaded_features) { %w[] }
 
     let(:lockfile) do
@@ -124,7 +123,7 @@ RSpec.describe 'RuboCop::CLI SuggestExtensions', :isolated_environment do # rubo
 
       it 'does not show the suggestion' do
         expect { cli.run(['example.rb']) }.not_to suggest_extensions
-        expect($stderr.string.blank?).to be(true)
+        expect($stderr.string).to be_blank
       end
     end
 
@@ -138,15 +137,6 @@ RSpec.describe 'RuboCop::CLI SuggestExtensions', :isolated_environment do # rubo
       end
 
       context 'that are dependencies' do
-        let(:gemfile) do
-          create_file('Gemfile', <<~RUBY)
-            gem 'rspec'
-            gem 'rake'
-            gem 'rubocop-rspec'
-            gem 'rubocop-rake'
-          RUBY
-        end
-
         before do
           create_file('Gemfile.lock', <<~TEXT)
             GEM
@@ -175,14 +165,6 @@ RSpec.describe 'RuboCop::CLI SuggestExtensions', :isolated_environment do # rubo
       end
 
       context 'that some are dependencies' do
-        let(:gemfile) do
-          create_file('Gemfile', <<~RUBY)
-            gem 'rspec'
-            gem 'rake'
-            gem 'rubocop-rake'
-          RUBY
-        end
-
         before do
           create_file('Gemfile.lock', <<~TEXT)
             GEM
@@ -254,15 +236,6 @@ RSpec.describe 'RuboCop::CLI SuggestExtensions', :isolated_environment do # rubo
           TEXT
         end
 
-        let(:gemfile) do
-          create_file('Gemfile', <<~RUBY)
-            gem 'rspec'
-            gem 'rake'
-            gem 'rubocop-rspec'
-            gem 'rubocop-rake'
-          RUBY
-        end
-
         let(:loaded_features) { %w[rubocop-rspec rubocop-rake] }
 
         it 'does not show the suggestion' do
@@ -311,7 +284,9 @@ RSpec.describe 'RuboCop::CLI SuggestExtensions', :isolated_environment do # rubo
       end
 
       it 'shows the suggestion' do
-        expect { cli.run(['example.rb']) }.to suggest_extensions.to_install('rubocop-rspec')
+        expect { cli.run(['example.rb']) }.to suggest_extensions.to_install(
+          'rubocop-rspec', 'rubocop-rspec_rails'
+        )
       end
     end
 
@@ -353,7 +328,9 @@ RSpec.describe 'RuboCop::CLI SuggestExtensions', :isolated_environment do # rubo
       end
 
       it 'shows the suggestion' do
-        expect { cli.run(['example.rb']) }.to suggest_extensions.to_install('rubocop-rspec')
+        expect { cli.run(['example.rb']) }.to suggest_extensions.to_install(
+          'rubocop-rspec', 'rubocop-rspec_rails'
+        )
       end
     end
 

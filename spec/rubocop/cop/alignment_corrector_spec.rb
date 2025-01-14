@@ -10,11 +10,11 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
           expect_offense(<<~RUBY)
             # >> 2
               42
-              ^^ Indent this node
+              ^^ Indent this node.
           RUBY
 
-          expect_correction(<<~RUBY, loop: false)
-            # >> 2
+          expect_correction(<<~RUBY)
+            #
                 42
           RUBY
         end
@@ -25,11 +25,11 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
           expect_offense(<<~RUBY)
             # << 3
                 42
-                ^^ Indent this node
+                ^^ Indent this node.
           RUBY
 
-          expect_correction(<<~RUBY, loop: false)
-            # << 3
+          expect_correction(<<~RUBY)
+            #
              42
           RUBY
         end
@@ -44,7 +44,7 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
         expect_offense(<<~RUBY)
           # >> #{column_delta}
           begin
-          ^^^^^ Indent this node
+          ^^^^^ Indent this node.
             #{start_heredoc}
           a
           b
@@ -52,8 +52,8 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
           end
         RUBY
 
-        expect_correction(<<~RUBY, loop: false)
-          # >> #{column_delta}
+        expect_correction(<<~RUBY)
+          #
           #{indentation}begin
           #{indentation}  #{start_heredoc}
           a
@@ -80,15 +80,15 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
         expect_offense(<<~RUBY)
           # >> 2
           begin
-          ^^^^^ Indent this node
+          ^^^^^ Indent this node.
             <<DOC
           single line
           DOC
           end
         RUBY
 
-        expect_correction(<<~RUBY, loop: false)
-          # >> 2
+        expect_correction(<<~RUBY)
+          #
           #{indentation}begin
           #{indentation}  <<DOC
           single line
@@ -103,7 +103,7 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
         expect_offense(<<~RUBY)
           # >> 2
           begin
-          ^^^^^ Indent this node
+          ^^^^^ Indent this node.
             dstr =
           'a
           b
@@ -115,8 +115,8 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
           end
         RUBY
 
-        expect_correction(<<~RUBY, loop: false)
-          # >> 2
+        expect_correction(<<~RUBY)
+          #
             begin
               dstr =
             'a

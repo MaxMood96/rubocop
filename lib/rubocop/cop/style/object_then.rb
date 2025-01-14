@@ -30,11 +30,13 @@ module RuboCop
         minimum_target_ruby_version 2.6
 
         MSG = 'Prefer `%<prefer>s` over `%<current>s`.'
+        RESTRICT_ON_SEND = %i[then yield_self].freeze
 
         def on_block(node)
+          return unless RESTRICT_ON_SEND.include?(node.method_name)
+
           check_method_node(node.send_node)
         end
-
         alias on_numblock on_block
 
         def on_send(node)
@@ -42,27 +44,26 @@ module RuboCop
 
           check_method_node(node)
         end
+        alias on_csend on_send
 
         private
 
         def check_method_node(node)
-          return unless preferred_method(node)
+          if preferred_method?(node)
+            correct_style_detected
+          else
+            opposite_style_detected
+            message = message(node)
+            add_offense(node.loc.selector, message: message) do |corrector|
+              prefer = style == :then && node.receiver.nil? ? 'self.then' : style
 
-          message = message(node)
-          add_offense(node.loc.selector, message: message) do |corrector|
-            corrector.replace(node.loc.selector, style.to_s)
+              corrector.replace(node.loc.selector, prefer)
+            end
           end
         end
 
-        def preferred_method(node)
-          case style
-          when :then
-            node.method?(:yield_self)
-          when :yield_self
-            node.method?(:then)
-          else
-            false
-          end
+        def preferred_method?(node)
+          node.method?(style)
         end
 
         def message(node)

@@ -44,22 +44,32 @@ module RuboCop
       #
       class RedundantLineBreak < Base
         include CheckAssignment
+        include CheckSingleLineSuitability
         extend AutoCorrector
 
         MSG = 'Redundant line break detected.'
 
+        def on_lvasgn(node)
+          super unless end_with_percent_blank_string?(processed_source)
+        end
+
         def on_send(node)
           # Include "the whole expression".
-          node = node.parent while convertible_block?(node) ||
-                                   node.parent.is_a?(RuboCop::AST::BinaryOperatorNode) ||
-                                   node.parent&.send_type?
+          node = node.parent while node.parent&.send_type? ||
+                                   convertible_block?(node) ||
+                                   node.parent.is_a?(RuboCop::AST::BinaryOperatorNode)
 
           return unless offense?(node) && !part_of_ignored_node?(node)
 
           register_offense(node)
         end
+        alias on_csend on_send
 
         private
+
+        def end_with_percent_blank_string?(processed_source)
+          processed_source.buffer.source.end_with?("%\n\n")
+        end
 
         def check_assignment(node, _rhs)
           return unless offense?(node)
@@ -69,15 +79,26 @@ module RuboCop
 
         def register_offense(node)
           add_offense(node) do |corrector|
-            corrector.replace(node.source_range, to_single_line(node.source).strip)
+            corrector.replace(node, to_single_line(node.source).strip)
           end
           ignore_node(node)
         end
 
         def offense?(node)
-          return false if configured_to_not_be_inspected?(node)
+          return false unless node.multiline? && suitable_as_single_line?(node)
+          return require_backslash?(node) if node.operator_keyword?
 
-          node.multiline? && !too_long?(node) && suitable_as_single_line?(node)
+          !index_access_call_chained?(node) && !configured_to_not_be_inspected?(node)
+        end
+
+        def require_backslash?(node)
+          processed_source.lines[node.loc.operator.line - 1].end_with?('\\')
+        end
+
+        def index_access_call_chained?(node)
+          return false unless node.send_type? && node.method?(:[])
+
+          node.children.first.send_type? && node.children.first.method?(:[])
         end
 
         def configured_to_not_be_inspected?(node)
@@ -94,44 +115,13 @@ module RuboCop
         end
 
         def single_line_block_chain_enabled?
-          @config.for_cop('Layout/SingleLineBlockChain')['Enabled']
-        end
-
-        def suitable_as_single_line?(node)
-          !comment_within?(node) &&
-            node.each_descendant(:if, :case, :kwbegin, :def).none? &&
-            node.each_descendant(:dstr, :str).none?(&:heredoc?) &&
-            node.each_descendant(:begin).none? { |b| !b.single_line? }
+          @config.cop_enabled?('Layout/SingleLineBlockChain')
         end
 
         def convertible_block?(node)
           parent = node.parent
           parent&.block_type? && node == parent.send_node &&
             (node.parenthesized? || !node.arguments?)
-        end
-
-        def comment_within?(node)
-          processed_source.comments.map(&:loc).map(&:line).any? do |comment_line_number|
-            comment_line_number >= node.first_line && comment_line_number <= node.last_line
-          end
-        end
-
-        def too_long?(node)
-          lines = processed_source.lines[(node.first_line - 1)...node.last_line]
-          to_single_line(lines.join("\n")).length > max_line_length
-        end
-
-        def to_single_line(source)
-          source
-            .gsub(/" *\\\n\s*'/, %q(" + ')) # Double quote, backslash, and then single quote
-            .gsub(/' *\\\n\s*"/, %q(' + ")) # Single quote, backslash, and then double quote
-            .gsub(/(["']) *\\\n\s*\1/, '')  # Double or single quote, backslash, then same quote
-            .gsub(/\n\s*(?=\.\w)/, '')      # Extra space within method chaining
-            .gsub(/\s*\\?\n\s*/, ' ')       # Any other line break, with or without backslash
-        end
-
-        def max_line_length
-          config.for_cop('Layout/LineLength')['Max']
         end
       end
     end

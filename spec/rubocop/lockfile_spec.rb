@@ -38,7 +38,7 @@ RSpec.describe RuboCop::Lockfile, :isolated_environment do
       it { is_expected.to eq([]) }
     end
 
-    context 'when there is an no lockfile' do
+    context 'when there is no lockfile' do
       let(:lockfile) { nil }
 
       it { is_expected.to eq([]) }
@@ -49,6 +49,19 @@ RSpec.describe RuboCop::Lockfile, :isolated_environment do
         create_file('Gemfile.lock', <<~LOCKFILE)
           <<<<<<<
         LOCKFILE
+      end
+
+      it { is_expected.to eq([]) }
+    end
+
+    context 'when there is a gemfile without lockfile' do
+      let(:lockfile) { nil }
+
+      before do
+        allow(Bundler).to receive(:default_lockfile).and_return('Gemfile.lock')
+        create_file('Gemfile', <<~GEMFILE)
+          gem 'rubocop', '~> 1.65.0'
+        GEMFILE
       end
 
       it { is_expected.to eq([]) }

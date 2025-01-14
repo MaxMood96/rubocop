@@ -91,7 +91,7 @@ module RuboCop
             if !left_parens?(token1, token2) && !right_parens?(token1, token2)
               correct_missing_space(token1, token2)
             else
-              correct_extaneus_space_between_consecutive_parens(token1, token2)
+              correct_extraneous_space_between_consecutive_parens(token1, token2)
             end
           end
         end
@@ -112,7 +112,7 @@ module RuboCop
           end
         end
 
-        def correct_extaneus_space_between_consecutive_parens(token1, token2)
+        def correct_extraneous_space_between_consecutive_parens(token1, token2)
           return if range_between(token1.end_pos, token2.begin_pos).source != ' '
 
           range = range_between(token1.end_pos, token2.begin_pos)
@@ -168,7 +168,7 @@ module RuboCop
           # follows, and that the rules for space inside don't apply.
           return true if token2.comment?
 
-          return true unless same_line?(token1, token2) && !token1.space_after?
+          !same_line?(token1, token2) || token1.space_after?
         end
       end
     end

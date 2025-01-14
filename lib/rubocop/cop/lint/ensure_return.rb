@@ -13,7 +13,6 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   def foo
       #     do_something
       #   ensure
@@ -21,10 +20,7 @@ module RuboCop
       #     return self
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   def foo
       #     do_something
       #     self
@@ -32,8 +28,7 @@ module RuboCop
       #     cleanup
       #   end
       #
-      #   # also good
-      #
+      #   # good
       #   def foo
       #     begin
       #       do_something
@@ -45,13 +40,10 @@ module RuboCop
       #     cleanup
       #   end
       class EnsureReturn < Base
-        extend AutoCorrector
-        include RangeHelp
-
         MSG = 'Do not return from an `ensure` block.'
 
         def on_ensure(node)
-          node.body&.each_node(:return) { |return_node| add_offense(return_node) }
+          node.branch&.each_node(:return) { |return_node| add_offense(return_node) }
         end
       end
     end

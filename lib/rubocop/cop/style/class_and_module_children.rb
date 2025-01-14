@@ -11,7 +11,7 @@ module RuboCop
       #
       #   Moving from compact to nested children requires knowledge of whether the
       #   outer parent is a module or a class. Moving from nested to compact requires
-      #   verification that the outer parent is defined elsewhere. Rubocop does not
+      #   verification that the outer parent is defined elsewhere. RuboCop does not
       #   have the knowledge to perform either operation safely and thus requires
       #   manual oversight.
       #
@@ -126,9 +126,12 @@ module RuboCop
         end
 
         def unindent(corrector, node)
-          return if node.body.children.last.nil?
+          return unless node.body.children.last
 
-          column_delta = configured_indentation_width - leading_spaces(node.body.children.last).size
+          last_child_leading_spaces = leading_spaces(node.body.children.last)
+          return if leading_spaces(node).size == last_child_leading_spaces.size
+
+          column_delta = configured_indentation_width - last_child_leading_spaces.size
           return if column_delta.zero?
 
           AlignmentCorrector.correct(corrector, processed_source, node, column_delta)
@@ -139,7 +142,7 @@ module RuboCop
         end
 
         def check_style(node, body)
-          return if node.identifier.children[0]&.cbase_type?
+          return if node.identifier.namespace&.cbase_type?
 
           if style == :nested
             check_nested_style(node)

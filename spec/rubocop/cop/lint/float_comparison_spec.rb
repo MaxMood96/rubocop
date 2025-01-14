@@ -29,7 +29,7 @@ RSpec.describe RuboCop::Cop::Lint::FloatComparison, :config do
     RUBY
   end
 
-  it 'registers an offense when comparing with arightmetic operator on floats' do
+  it 'registers an offense when comparing with arithmetic operator on floats' do
     expect_offense(<<~RUBY)
       x == 0.1 + y
       ^^^^^^^^^^^^ Avoid (in)equality comparisons of floats as they are unreliable.
@@ -65,6 +65,40 @@ RSpec.describe RuboCop::Cop::Lint::FloatComparison, :config do
   it 'does not register an offense when comparing with float using epsilon' do
     expect_no_offenses(<<~RUBY)
       (x - 0.1) < epsilon
+    RUBY
+  end
+
+  it 'does not register an offense when comparing with rational literal' do
+    expect_no_offenses(<<~RUBY)
+      value == 0.2r
+    RUBY
+  end
+
+  it 'does not register an offense when comparing against zero' do
+    expect_no_offenses(<<~RUBY)
+      x == 0.0
+      x.to_f == 0
+      x.to_f.abs == 0.0
+      x != 0.0
+      x.to_f != 0
+      x.to_f.zero?
+      x.to_f.nonzero?
+    RUBY
+  end
+
+  it 'does not register an offense when comparing against nil' do
+    expect_no_offenses(<<~RUBY)
+      Float('not_a_float', exception: false) == nil
+      nil != Float('not_a_float', exception: false)
+    RUBY
+  end
+
+  it 'does not register an offense when comparing with multiple arguments' do
+    expect_no_offenses(<<~RUBY)
+      x.==(0.1, 0.2)
+      x.!=(0.1, 0.2)
+      x.eql?(0.1, 0.2)
+      x.equal?(0.1, 0.2)
     RUBY
   end
 end

@@ -58,12 +58,12 @@ module RuboCop
 
         # @!method each_with_object_block_candidate?(node)
         def_node_matcher :each_with_object_block_candidate?, <<~PATTERN
-          (block $(send _ {:inject :reduce} _) $_ $_)
+          (block $(call _ {:inject :reduce} _) $_ $_)
         PATTERN
 
         # @!method each_with_object_numblock_candidate?(node)
         def_node_matcher :each_with_object_numblock_candidate?, <<~PATTERN
-          (numblock $(send _ {:inject :reduce} _) 2 $_)
+          (numblock $(call _ {:inject :reduce} _) 2 $_)
         PATTERN
 
         def autocorrect_block(corrector, node, return_value)
@@ -131,7 +131,7 @@ module RuboCop
         end
 
         def whole_line_expression(node)
-          range_by_whole_lines(node.loc.expression, include_final_newline: true)
+          range_by_whole_lines(node.source_range, include_final_newline: true)
         end
       end
     end

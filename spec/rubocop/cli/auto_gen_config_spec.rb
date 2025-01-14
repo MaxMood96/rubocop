@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'timeout'
-
 RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubocop:disable RSpec/DescribeClass
   subject(:cli) { RuboCop::CLI.new }
 
@@ -53,7 +51,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
 
               # Offense count: 2
               # This cop supports safe autocorrection (--autocorrect).
-              # Configuration parameters: AllowHeredoc, AllowURI, URISchemes, IgnoreCopDirectives, AllowedPatterns.
+              # Configuration parameters: AllowHeredoc, AllowURI, URISchemes, IgnoreCopDirectives, AllowedPatterns, SplitStrings.
               # URISchemes: http, https
               Layout/LineLength:
                 Max: 138
@@ -62,7 +60,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           $stdout = StringIO.new
           expect(RuboCop::CLI.new.run([])).to eq(0)
           expect($stderr.string).to eq('')
-          expect($stdout.string.include?('no offenses detected')).to be(true)
+          expect($stdout.string).to include('no offenses detected')
         end
       end
     end
@@ -150,26 +148,26 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
 
         it "bases other cops' configuration on the overridden LineLength:Max" do
           expect(cli.run(['--auto-gen-config'])).to eq(0)
-          expect($stdout.string.include?(<<~YAML)).to be(true)
+          expect($stdout.string).to include(<<~YAML)
             Added inheritance from `.rubocop_todo.yml` in `.rubocop.yml`.
             Phase 1 of 2: run Layout/LineLength cop (skipped because the default Layout/LineLength:Max is overridden)
             Phase 2 of 2: run all cops
           YAML
-          # We generate a Layout/LineLength:Max even though it's overridden in
-          # .rubocop.yml. We want to show somewhere what the actual maximum is.
+          # Layout/LineLength gets an Exclude property because Max is set in .rubocop.yml.
           #
-          # Note that there is no Style/IfUnlessModifier offense registered due
-          # to the Max:90 setting.
+          # Note that there is no Style/IfUnlessModifier offense registered due to the Max:90
+          # setting.
           expect(File.readlines('.rubocop_todo.yml')
                   .drop_while { |line| line.start_with?('#') }.join)
             .to eq(<<~YAML)
 
               # Offense count: 1
               # This cop supports safe autocorrection (--autocorrect).
-              # Configuration parameters: AllowHeredoc, AllowURI, URISchemes, IgnoreCopDirectives, AllowedPatterns.
+              # Configuration parameters: Max, AllowHeredoc, AllowURI, URISchemes, IgnoreCopDirectives, AllowedPatterns, SplitStrings.
               # URISchemes: http, https
               Layout/LineLength:
-                Max: 99
+                Exclude:
+                  - 'example.rb'
 
               # Offense count: 1
               # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -186,17 +184,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
               Max: 90
               Enabled: true
           YAML
-          $stdout = StringIO.new
-          expect(RuboCop::CLI.new.run(%w[--format simple --debug])).to eq(1)
-          expect($stdout.string.include?('.rubocop.yml: Layout/LineLength:Max overrides the ' \
-                                         "same parameter in .rubocop_todo.yml\n"))
-            .to be(true)
-          expect($stdout.string.include?(<<~OUTPUT)).to be(true)
-            == example.rb ==
-            C:  2: 91: Layout/LineLength: Line is too long. [99/90]
-
-            1 file inspected, 1 offense detected
-          OUTPUT
+          expect(RuboCop::CLI.new.run([])).to eq(0)
         end
       end
 
@@ -206,7 +194,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
 
         it 'skips the cop from both phases of the run' do
           expect(cli.run(['--auto-gen-config'])).to eq(0)
-          expect($stdout.string.include?(<<~YAML)).to be(true)
+          expect($stdout.string).to include(<<~YAML)
             Added inheritance from `.rubocop_todo.yml` in `.rubocop.yml`.
             Phase 1 of 2: run Layout/LineLength cop (skipped because Layout/LineLength is disabled)
             Phase 2 of 2: run all cops
@@ -256,7 +244,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
 
         it "bases other cops' configuration on the overridden LineLength:Max" do
           expect(cli.run(['--auto-gen-config'])).to eq(0)
-          expect($stdout.string.include?(<<~YAML)).to be(true)
+          expect($stdout.string).to include(<<~YAML)
             Added inheritance from `.rubocop_todo.yml` in `.rubocop.yml`.
             Phase 1 of 2: run Layout/LineLength cop (skipped because the default Layout/LineLength:Max is overridden)
             Phase 2 of 2: run all cops
@@ -300,50 +288,78 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
       end
     end
 
-    it 'overwrites an existing todo file' do
-      create_file('example1.rb', ['# frozen_string_literal: true',
-                                  '',
-                                  'x= 0 ',
-                                  '#' * 125,
-                                  'y ',
-                                  'puts x'])
-      create_file('.rubocop_todo.yml', <<~YAML)
-        Layout/LineLength:
-          Enabled: false
-      YAML
-      create_file('.rubocop.yml', ['inherit_from: .rubocop_todo.yml'])
-      expect(cli.run(['--auto-gen-config'])).to eq(0)
-      expect(File.readlines('.rubocop_todo.yml')[8..].map(&:chomp))
-        .to eq(['# Offense count: 1',
-                '# This cop supports safe autocorrection (--autocorrect).',
-                '# Configuration parameters: AllowForAlignment, ' \
-                'EnforcedStyleForExponentOperator.',
-                '# SupportedStylesForExponentOperator: space, no_space',
-                'Layout/SpaceAroundOperators:',
-                '  Exclude:',
-                "    - 'example1.rb'",
-                '',
-                '# Offense count: 2',
-                '# This cop supports safe autocorrection (--autocorrect).',
-                '# Configuration parameters: AllowInHeredoc.',
-                'Layout/TrailingWhitespace:',
-                '  Exclude:',
-                "    - 'example1.rb'",
-                '',
-                '# Offense count: 1',
-                '# This cop supports safe autocorrection (--autocorrect).',
-                '# Configuration parameters: AllowHeredoc, ' \
-                'AllowURI, URISchemes, IgnoreCopDirectives, ' \
-                'AllowedPatterns.',
-                '# URISchemes: http, https',
-                'Layout/LineLength:',
-                '  Max: 125'])
+    shared_examples 'overwrites todo file' do |description, code|
+      context "when .rubocop.yml contains #{description}" do
+        it 'overwrites an existing todo file' do
+          create_file('example1.rb', ['# frozen_string_literal: true',
+                                      '',
+                                      'x= 0 ',
+                                      '#' * 125,
+                                      'y ',
+                                      'puts x'])
+          create_file('.rubocop_todo.yml', <<~YAML)
+            Layout/LineLength:
+              Enabled: false
+          YAML
+          create_empty_file('other.yml')
+          create_file('.rubocop.yml', code)
+          expect(cli.run(['--auto-gen-config'])).to eq(0)
+          expect(File.readlines('.rubocop_todo.yml')[8..].map(&:chomp))
+            .to eq(['# Offense count: 1',
+                    '# This cop supports safe autocorrection (--autocorrect).',
+                    '# Configuration parameters: AllowForAlignment, ' \
+                    'EnforcedStyleForExponentOperator, EnforcedStyleForRationalLiterals.',
+                    '# SupportedStylesForExponentOperator: space, no_space',
+                    '# SupportedStylesForRationalLiterals: space, no_space',
+                    'Layout/SpaceAroundOperators:',
+                    '  Exclude:',
+                    "    - 'example1.rb'",
+                    '',
+                    '# Offense count: 2',
+                    '# This cop supports safe autocorrection (--autocorrect).',
+                    '# Configuration parameters: AllowInHeredoc.',
+                    'Layout/TrailingWhitespace:',
+                    '  Exclude:',
+                    "    - 'example1.rb'",
+                    '',
+                    '# Offense count: 1',
+                    '# This cop supports safe autocorrection (--autocorrect).',
+                    '# Configuration parameters: AllowHeredoc, ' \
+                    'AllowURI, URISchemes, IgnoreCopDirectives, ' \
+                    'AllowedPatterns, SplitStrings.',
+                    '# URISchemes: http, https',
+                    'Layout/LineLength:',
+                    '  Max: 125'])
+          expect(File.readlines('.rubocop.yml').map(&:chomp)).to eq(code)
 
-      # Create new CLI instance to avoid using cached configuration.
-      new_cli = RuboCop::CLI.new
+          # Create new CLI instance to avoid using cached configuration.
+          new_cli = RuboCop::CLI.new
 
-      expect(new_cli.run(['example1.rb'])).to eq(0)
+          expect(new_cli.run(['example1.rb'])).to eq(0)
+        end
+      end
     end
+
+    include_examples 'overwrites todo file',
+                     'only the inherit_from line',
+                     ['inherit_from: .rubocop_todo.yml']
+
+    # Makes the shared example work the same with the conditional as without.
+    ENV['HZPKCEAXTFQLOWB'] = 'true'
+
+    include_examples 'overwrites todo file',
+                     'a single line inherit_from in an ERB conditional',
+                     ['<% if ENV["HZPKCEAXTFQLOWB"] %>',
+                      'inherit_from: .rubocop_todo.yml',
+                      '<% end %>']
+
+    include_examples 'overwrites todo file',
+                     'a multiline inherit_from in an ERB conditional',
+                     ['<% if ENV["HZPKCEAXTFQLOWB"] %>',
+                      'inherit_from:',
+                      '  - .rubocop_todo.yml',
+                      '  - other.yml',
+                      '<% end %>']
 
     it 'honors rubocop:disable comments' do
       create_file('example1.rb', ['#' * 121,
@@ -387,11 +403,102 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
                 '# This cop supports safe autocorrection (--autocorrect).',
                 '# Configuration parameters: AllowHeredoc, ' \
                 'AllowURI, URISchemes, IgnoreCopDirectives, ' \
-                'AllowedPatterns.',
+                'AllowedPatterns, SplitStrings.',
                 '# URISchemes: http, https',
                 'Layout/LineLength:',
                 '  Max: 121',
                 ''].join("\n"))
+    end
+
+    context 'when --only is used' do
+      before do
+        create_file('example.rb', <<~RUBY)
+          # frozen_string_literal: true
+
+          class MyClass
+            def initialize
+              p "No documentation for class"
+            end
+          end
+
+          def f
+          #{'  #' * 46}
+            if #{'a' * 120}
+              return y
+            end
+
+            z
+          end
+        RUBY
+      end
+
+      context 'when --only does not contain Layout/LineLength' do
+        it 'generates TODO only for the mentioned cop' do
+          $stdout = StringIO.new
+          expect(cli.run(['--auto-gen-config', '--only', 'Style/Documentation'])).to eq(0)
+          expect(File.readlines('.rubocop_todo.yml')
+                    .drop_while { |line| line.start_with?('#') }.join)
+            .to eq(<<~YAML)
+
+              # Offense count: 1
+              # Configuration parameters: AllowedConstants.
+              Style/Documentation:
+                Exclude:
+                  - 'spec/**/*'
+                  - 'test/**/*'
+                  - 'example.rb'
+          YAML
+          expect($stderr.string).to eq('')
+          expect($stdout.string).to eq(<<~STRING)
+            Added inheritance from `.rubocop_todo.yml` in `.rubocop.yml`.
+            Phase 1 of 2: run Layout/LineLength cop (skipped because a list of cops is passed to the `--only` flag)
+            Phase 2 of 2: run all cops
+            Inspecting 1 file
+            C
+
+            1 file inspected, 1 offense detected
+            Created .rubocop_todo.yml.
+          STRING
+        end
+      end
+
+      context 'when --only contains Layout/LineLength' do
+        it 'generates TODO for every cop listed in the --only flag' do
+          $stdout = StringIO.new
+          expect(cli.run(['--auto-gen-config', '--only', 'Layout/LineLength,Style/Documentation']))
+            .to eq(0)
+          expect(File.readlines('.rubocop_todo.yml')
+                    .drop_while { |line| line.start_with?('#') }.join)
+            .to eq(<<~YAML)
+
+              # Offense count: 2
+              # This cop supports safe autocorrection (--autocorrect).
+              # Configuration parameters: AllowHeredoc, AllowURI, URISchemes, IgnoreCopDirectives, AllowedPatterns, SplitStrings.
+              # URISchemes: http, https
+              Layout/LineLength:
+                Max: 138
+
+              # Offense count: 1
+              # Configuration parameters: AllowedConstants.
+              Style/Documentation:
+                Exclude:
+                  - 'spec/**/*'
+                  - 'test/**/*'
+                  - 'example.rb'
+          YAML
+          expect($stderr.string).to eq('')
+          expect($stdout.string).to eq(<<~STRING)
+            Added inheritance from `.rubocop_todo.yml` in `.rubocop.yml`.
+            Phase 1 of 2: run Layout/LineLength cop (skipped because a list of cops is passed to the `--only` flag)
+            Phase 2 of 2: run all cops
+            Inspecting 1 file
+            C
+
+            1 file inspected, 3 offenses detected
+            Created .rubocop_todo.yml.
+          STRING
+        end
+      end
     end
 
     context 'when --config is used' do
@@ -404,7 +511,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
             Max: 95
         YAML
         expect(cli.run(%w[--auto-gen-config --config dir/cop_config.yml])).to eq(0)
-        expect(Dir['.*'].include?('.rubocop_todo.yml')).to be(true)
+        expect(Dir['.*']).to include('.rubocop_todo.yml')
         todo_contents = File.read('.rubocop_todo.yml').lines[8..].join
         expect(todo_contents).to eq(<<~YAML)
           # Offense count: 1
@@ -433,6 +540,22 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
         expect(cli.run(%w[--auto-gen-config --config dir/cop_config.yml])).to eq(0)
       end
 
+      context 'when --config is used with an absolute path' do
+        it 'can generate a todo list' do
+          create_file('example1.rb', ['$x = 0 ', '#' * 90, 'y ', 'puts x'])
+          create_empty_file('.rubocop.yml')
+          config_path = File.absolute_path('.rubocop.yml')
+          expect(cli.run(['--auto-gen-config', '--config', config_path])).to eq(0)
+          expect(Dir['.*']).to include('.rubocop_todo.yml')
+
+          # Check that paths are relativised correctly
+          expect(File.read('.rubocop_todo.yml')).to include(" - 'example1.rb'")
+          expect(File.read('.rubocop.yml')).to include('inherit_from: .rubocop_todo.yml')
+          # Checks that the command can be run again with config modified by itself.
+          expect(cli.run(['--auto-gen-config', '--config', config_path])).to eq(0)
+        end
+      end
+
       it 'can generate a todo list if default .rubocop.yml exists' do
         create_file('example1.rb', ['def foo', '  # bar', '  end'])
         create_file('.rubocop.yml', <<~YAML)
@@ -445,7 +568,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
         create_empty_file('cop_config.yml')
 
         expect(cli.run(%w[--auto-gen-config --config cop_config.yml])).to eq(0)
-        expect(Dir['.*'].include?('.rubocop_todo.yml')).to be(true)
+        expect(Dir['.*']).to include('.rubocop_todo.yml')
         todo_contents = File.read('.rubocop_todo.yml').lines[8..].join
         expect(todo_contents).to eq(<<~YAML)
           # Offense count: 1
@@ -490,7 +613,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
         expect(cli.run(%w[--auto-gen-config])).to eq(0)
         expect($stderr.string).to eq('')
         # expect($stdout.string).to include('Created .rubocop_todo.yml.')
-        expect(Dir['.*'].include?('.rubocop_todo.yml')).to be(true)
+        expect(Dir['.*']).to include('.rubocop_todo.yml')
         todo_contents = File.read('.rubocop_todo.yml').lines[8..].join
         expect(todo_contents).to eq(<<~YAML)
           # Offense count: 1
@@ -532,7 +655,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
         YAML
         expect(cli.run(%w[--auto-gen-config])).to eq(0)
         expect($stderr.string).to eq('')
-        expect(Dir['.*'].include?('.rubocop_todo.yml')).to be(true)
+        expect(Dir['.*']).to include('.rubocop_todo.yml')
         todo_contents = File.read('.rubocop_todo.yml').lines[8..].join
         expect(todo_contents).to eq(<<~YAML)
           # Offense count: 1
@@ -553,7 +676,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
     end
 
     context 'when existing config file has a YAML document start header' do
-      it 'inserts `inherit_from` key after hearder' do
+      it 'inserts `inherit_from` key after header' do
         create_file('example1.rb', <<~RUBY)
           def foo; end
         RUBY
@@ -566,7 +689,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
         YAML
         expect(cli.run(%w[--auto-gen-config])).to eq(0)
         expect($stderr.string).to eq('')
-        expect(Dir['.*'].include?('.rubocop_todo.yml')).to be(true)
+        expect(Dir['.*']).to include('.rubocop_todo.yml')
         todo_contents = File.read('.rubocop_todo.yml').lines[8..].join
         expect(todo_contents).to eq(<<~YAML)
           # Offense count: 1
@@ -604,7 +727,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
         Dir.chdir('dir') { expect(cli.run(%w[--auto-gen-config])).to eq(0) }
         expect($stderr.string).to eq('')
         # expect($stdout.string).to include('Created .rubocop_todo.yml.')
-        expect(Dir['dir/.*'].include?('dir/.rubocop_todo.yml')).to be(true)
+        expect(Dir['dir/.*']).to include('dir/.rubocop_todo.yml')
         todo_contents = File.read('dir/.rubocop_todo.yml').lines[8..].join
         expect(todo_contents).to eq(<<~YAML)
           # Offense count: 1
@@ -645,7 +768,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           YAML
           expect(cli.run(%w[--auto-gen-config])).to eq(0)
           expect($stderr.string).to eq('')
-          expect($stdout.string.include?(<<~YAML)).to be(true)
+          expect($stdout.string).to include(<<~YAML)
             Added inheritance from `.rubocop_todo.yml` in `.rubocop.yml`.
           YAML
           expect(File.read('.rubocop.yml')).to eq(<<~YAML)
@@ -665,7 +788,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           YAML
           expect(cli.run(%w[--auto-gen-config])).to eq(0)
           expect($stderr.string).to eq('')
-          expect($stdout.string.include?(<<~YAML)).to be(true)
+          expect($stdout.string).to include(<<~YAML)
             Added inheritance from `.rubocop_todo.yml` in `.rubocop.yml`.
           YAML
           expect(File.read('.rubocop.yml')).to eq(<<~YAML)
@@ -701,7 +824,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
 
       expect(cli.run(['--auto-gen-config'])).to eq(0)
       expect($stderr.string).to eq('')
-      expect($stdout.string.include?('Created .rubocop_todo.yml.')).to be(true)
+      expect($stdout.string).to include('Created .rubocop_todo.yml.')
       expected =
         ['# This configuration was generated by',
          '# `rubocop --auto-gen-config`',
@@ -744,8 +867,9 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
          '# Offense count: 1',
          '# This cop supports safe autocorrection (--autocorrect).',
          '# Configuration parameters: AllowForAlignment, ' \
-         'EnforcedStyleForExponentOperator.',
+         'EnforcedStyleForExponentOperator, EnforcedStyleForRationalLiterals.',
          '# SupportedStylesForExponentOperator: space, no_space',
+         '# SupportedStylesForRationalLiterals: space, no_space',
          'Layout/SpaceAroundOperators:',
          '  Exclude:',
          "    - 'example1.rb'",
@@ -775,7 +899,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
          '# This cop supports safe autocorrection (--autocorrect).',
          '# Configuration parameters: AllowHeredoc, ' \
          'AllowURI, URISchemes, IgnoreCopDirectives, ' \
-         'AllowedPatterns.',
+         'AllowedPatterns, SplitStrings.',
          '# URISchemes: http, https',
          'Layout/LineLength:',
          '  Max: 130']
@@ -846,8 +970,9 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
          '# Offense count: 1',
          '# This cop supports safe autocorrection (--autocorrect).',
          '# Configuration parameters: AllowForAlignment, ' \
-         'EnforcedStyleForExponentOperator.',
+         'EnforcedStyleForExponentOperator, EnforcedStyleForRationalLiterals.',
          '# SupportedStylesForExponentOperator: space, no_space',
+         '# SupportedStylesForRationalLiterals: space, no_space',
          'Layout/SpaceAroundOperators:',
          '  Exclude:',
          "    - 'example1.rb'",
@@ -868,7 +993,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
          '# This cop supports safe autocorrection (--autocorrect).',
          '# Configuration parameters: AllowHeredoc, ' \
          'AllowURI, URISchemes, IgnoreCopDirectives, ' \
-         'AllowedPatterns.',
+         'AllowedPatterns, SplitStrings.',
          '# URISchemes: http, https',
          'Layout/LineLength:',
          '  Max: 130']
@@ -911,7 +1036,9 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
 
         $stdout = StringIO.new
         expect(cli.run(['--format', 'offenses'])).to eq(1)
-        expect($stdout.string.lines.grep(%r{/})).to eq(["1  Layout/TrailingWhitespace\n"])
+        expect($stdout.string.lines.grep(%r{/})).to eq(
+          ["1  Layout/TrailingWhitespace [Safe Correctable]\n"]
+        )
       end
 
       shared_examples 'leaves out Excludes' do |merge_style, config|
@@ -1104,7 +1231,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
 
       expect(cli.run(['--auto-gen-config', '--no-offense-counts'])).to eq(0)
       expect($stderr.string).to eq('')
-      expect($stdout.string.include?('Created .rubocop_todo.yml.')).to be(true)
+      expect($stdout.string).to include('Created .rubocop_todo.yml.')
       expected =
         ['# This configuration was generated by',
          '# `rubocop --auto-gen-config --no-offense-counts`',
@@ -1142,8 +1269,9 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
          '',
          '# This cop supports safe autocorrection (--autocorrect).',
          '# Configuration parameters: AllowForAlignment, ' \
-         'EnforcedStyleForExponentOperator.',
+         'EnforcedStyleForExponentOperator, EnforcedStyleForRationalLiterals.',
          '# SupportedStylesForExponentOperator: space, no_space',
+         '# SupportedStylesForRationalLiterals: space, no_space',
          'Layout/SpaceAroundOperators:',
          '  Exclude:',
          "    - 'example1.rb'",
@@ -1169,7 +1297,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
          '# This cop supports safe autocorrection (--autocorrect).',
          '# Configuration parameters: AllowHeredoc, ' \
          'AllowURI, URISchemes, IgnoreCopDirectives, ' \
-         'AllowedPatterns.',
+         'AllowedPatterns, SplitStrings.',
          '# URISchemes: http, https',
          'Layout/LineLength:',
          '  Max: 130']
@@ -1195,8 +1323,13 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
       # absolute Exclude paths will point into this example's work directory.
       RuboCop::ConfigLoader.default_configuration = nil
 
+      $stdout = StringIO.new
       expect(cli.run(['--auto-gen-config', '--auto-gen-only-exclude',
                       '--exclude-limit', '1'])).to eq(0)
+      expect($stdout.string).to include(<<~STRING)
+        Phase 1 of 2: run Layout/LineLength cop (skipped because only excludes will be generated due to `--auto-gen-only-exclude` flag)
+        Phase 2 of 2: run all cops
+      STRING
       actual = File.read('.rubocop_todo.yml').split($RS)
 
       # With --exclude-limit 1 we get MinDigits generated for NumericLiterals
@@ -1205,6 +1338,9 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
       # the same cop in a single file. Exclude properties are generated for
       # them.
       expect(actual.grep(/^[^#]/).join($RS)).to eq(<<~YAML.chomp)
+        Layout/LineLength:
+          Exclude:
+            - 'example1.rb'
         Lint/UnusedMethodArgument:
           Exclude:
             - 'example2.rb'
@@ -1215,6 +1351,31 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           Enabled: false
         Style/NumericLiterals:
           MinDigits: 7
+      YAML
+    end
+
+    it 'does not duplicate `Layout/LineLength` with --auto-gen-only-exclude when it is disabled inline and other offense' do
+      create_file('example1.rb', <<~RUBY)
+        # frozen_string_literal: true
+
+        # Documentation comment
+        class Foo
+          def foo
+            puts #{'a' * 150}
+          end
+
+          # rubocop:disable Layout/LineLength
+          def bar
+            puts #{'a' * 150}
+          end
+          # rubocop:enable Layout/LineLength
+        end
+      RUBY
+
+      expect(cli.run(['--auto-gen-config', '--auto-gen-only-exclude'])).to eq(0)
+      actual = File.read('.rubocop_todo.yml').split($RS)
+
+      expect(actual.grep(/^[^#]/).join($RS)).to eq(<<~YAML.chomp)
         Layout/LineLength:
           Exclude:
             - 'example1.rb'
@@ -1237,33 +1398,68 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
     end
 
     describe 'when --no-exclude-limit is given' do
-      before do
-        offending_files_count.times do |i|
-          create_file("example#{i}.rb", [' '])
-        end
-      end
-
       let(:offending_files_count) do
         RuboCop::Options::DEFAULT_MAXIMUM_EXCLUSION_ITEMS + 1
       end
 
-      it 'always prefers Exclude to Enabled' do
-        expect(cli.run(['--auto-gen-config', '--no-exclude-limit'])).to eq(0)
-        lines = File.readlines('.rubocop_todo.yml')
-        expect(lines[1]).to eq("# `rubocop --auto-gen-config --no-exclude-limit`\n")
-        expect(lines[9..12].join).to eq(
-          <<~YAML
-            # This cop supports safe autocorrection (--autocorrect).
-            # Configuration parameters: AllowInHeredoc.
-            Layout/TrailingWhitespace:
-              Exclude:
+      context 'for a cop without Max configuration' do
+        before do
+          offending_files_count.times do |i|
+            create_file("example#{i}.rb", [' '])
+          end
+        end
+
+        it 'always prefers Exclude to Enabled' do
+          expect(cli.run(['--auto-gen-config', '--no-exclude-limit'])).to eq(0)
+          lines = File.readlines('.rubocop_todo.yml')
+          expect(lines[1]).to eq("# `rubocop --auto-gen-config --no-exclude-limit`\n")
+          expect(lines[9..12].join).to eq(
+            <<~YAML
+              # This cop supports safe autocorrection (--autocorrect).
+              # Configuration parameters: AllowInHeredoc.
+              Layout/TrailingWhitespace:
+                Exclude:
+            YAML
+          )
+          expect(lines[13..]).to eq(
+            Array.new(offending_files_count) do |i|
+              "    - 'example#{i}.rb'\n"
+            end.sort
+          )
+        end
+      end
+
+      context 'for a cop with Max config' do
+        before do
+          create_file('.rubocop.yml', <<~YAML)
+            AllCops:
+              DisabledByDefault: true
+            Metrics/ClassLength:
+              Enabled: true
           YAML
-        )
-        expect(lines[13..]).to eq(
-          Array.new(offending_files_count) do |i|
-            "    - 'example#{i}.rb'\n"
-          end.sort
-        )
+          offending_files_count.times do |i|
+            max_lines = RuboCop::ConfigLoader.default_configuration['Metrics/ClassLength']['Max']
+            create_file("example#{i}.rb", ['class Foo', *Array.new(max_lines + 1, '  bar'), 'end'])
+          end
+        end
+
+        it 'always prefers Exclude to Enabled' do
+          expect(cli.run(['--auto-gen-config', '--auto-gen-only-exclude',
+                          '--no-exclude-limit'])).to eq(0)
+          lines = File.readlines('.rubocop_todo.yml')
+          expect(lines[9..11].join).to eq(
+            <<~YAML
+              # Configuration parameters: CountComments, Max, CountAsOne.
+              Metrics/ClassLength:
+                Exclude:
+            YAML
+          )
+          expect(lines[12..]).to eq(
+            Array.new(offending_files_count) do |i|
+              "    - 'example#{i}.rb'\n"
+            end.sort
+          )
+        end
       end
     end
 
@@ -1329,7 +1525,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
       it 'displays report summary but no offenses' do
         expect(cli.run(['--auto-gen-config'])).to eq(0)
 
-        expect($stdout.string.include?(<<~OUTPUT)).to be(true)
+        expect($stdout.string).to include(<<~OUTPUT)
           Inspecting 1 file
           C
 
@@ -1348,7 +1544,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           .to eq(<<~YAML)
             # Configuration parameters: EnforcedShorthandSyntax, UseHashRocketsWithSymbolValues, PreferHashRocketsForNonAlnumEndingSymbols.
             # SupportedStyles: ruby19, hash_rockets, no_mixed_keys, ruby19_no_mixed_keys
-            # SupportedShorthandSyntax: always, never, either, consistent
+            # SupportedShorthandSyntax: always, never, either, consistent, either_consistent
             Style/HashSyntax:
               EnforcedStyle: hash_rockets
           YAML
@@ -1362,7 +1558,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           .to eq(<<~YAML)
             # Configuration parameters: EnforcedStyle, EnforcedShorthandSyntax, UseHashRocketsWithSymbolValues, PreferHashRocketsForNonAlnumEndingSymbols.
             # SupportedStyles: ruby19, hash_rockets, no_mixed_keys, ruby19_no_mixed_keys
-            # SupportedShorthandSyntax: always, never, either, consistent
+            # SupportedShorthandSyntax: always, never, either, consistent, either_consistent
             Style/HashSyntax:
               Exclude:
                 - 'example1.rb'
@@ -1379,7 +1575,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           .to eq(<<~YAML)
             # Configuration parameters: EnforcedShorthandSyntax, UseHashRocketsWithSymbolValues, PreferHashRocketsForNonAlnumEndingSymbols.
             # SupportedStyles: ruby19, hash_rockets, no_mixed_keys, ruby19_no_mixed_keys
-            # SupportedShorthandSyntax: always, never, either, consistent
+            # SupportedShorthandSyntax: always, never, either, consistent, either_consistent
             Style/HashSyntax:
               Exclude:
                 - 'example1.rb'
@@ -1394,8 +1590,23 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           .to eq(<<~YAML)
             # Configuration parameters: EnforcedStyle, EnforcedShorthandSyntax, UseHashRocketsWithSymbolValues, PreferHashRocketsForNonAlnumEndingSymbols.
             # SupportedStyles: ruby19, hash_rockets, no_mixed_keys, ruby19_no_mixed_keys
-            # SupportedShorthandSyntax: always, never, either, consistent
+            # SupportedShorthandSyntax: always, never, either, consistent, either_consistent
             Style/HashSyntax:
+              Exclude:
+                - 'example1.rb'
+          YAML
+      end
+
+      it 'generates Exclude for expanded EnforcedStyle if it solves all offenses' do
+        create_file('example1.rb', ['# frozen_string_literal: true', '', 'h{}'])
+
+        expect(cli.run(['--auto-gen-config', '--no-auto-gen-enforced-style'])).to eq(0)
+        expect(File.readlines('.rubocop_todo.yml')[10..].join)
+          .to eq(<<~YAML)
+            # Configuration parameters: EnforcedStyle.
+            # SupportedStyles: space, no_space
+            # SupportedStylesForEmptyBraces: space, no_space
+            Layout/SpaceBeforeBlockBraces:
               Exclude:
                 - 'example1.rb'
           YAML
@@ -1408,6 +1619,8 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           AllCops:
             NewCops: enable
             TargetRubyVersion: 3.1
+          Style/HashSyntax:
+            EnforcedShorthandSyntax: always
         YAML
         create_file('example1.rb', ['# frozen_string_literal: true', '', '{ a: a }'])
 
@@ -1416,7 +1629,7 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
           .to eq(<<~YAML)
             # Configuration parameters: EnforcedStyle, EnforcedShorthandSyntax, UseHashRocketsWithSymbolValues, PreferHashRocketsForNonAlnumEndingSymbols.
             # SupportedStyles: ruby19, hash_rockets, no_mixed_keys, ruby19_no_mixed_keys
-            # SupportedShorthandSyntax: always, never, either, consistent
+            # SupportedShorthandSyntax: always, never, either, consistent, either_consistent
             Style/HashSyntax:
               Exclude:
                 - 'example1.rb'
@@ -1424,8 +1637,62 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
       end
     end
 
+    context 'when there is code conforming to chosen enforced style and code not conforming to any supported style' do
+      it 'generates an Exclude list' do
+        create_file('.rubocop.yml', <<~YAML)
+          AllCops:
+            DisabledByDefault: true
+
+          Naming/MethodName:
+            Enabled: true
+        YAML
+
+        create_file('bad.rb', ['def Bad', 'end'])
+        create_file('good.rb', ['def good', 'end'])
+
+        expect(cli.run(['--auto-gen-config'])).to eq(0)
+        expect(File.readlines('.rubocop_todo.yml')[10..].join)
+          .to eq(<<~YAML)
+            # SupportedStyles: snake_case, camelCase
+            Naming/MethodName:
+              Exclude:
+                - 'bad.rb'
+          YAML
+      end
+    end
+
     it 'can be called when there are no files to inspection' do
       expect(cli.run(['--auto-gen-config'])).to eq(0)
+    end
+
+    context 'when Max configuration is overridden in .rubocop.yml' do
+      it 'generates Exclude instead of Max' do
+        create_file('.rubocop.yml', <<~YAML)
+          Metrics/ClassLength:
+            Max: 250
+          Layout/EmptyLinesAroundClassBody:
+            Enabled: false
+        YAML
+        create_file(
+          'file.rb',
+          [
+            '# A long class',
+            'class TooLong',
+            *Array.new(100) { |i| ["  def method#{i}", "    #{i}", '  end', ''] },
+            'end'
+          ].flatten
+        )
+        expect(cli.run(['--auto-gen-config'])).to eq(0)
+        expect(File.readlines('.rubocop_todo.yml').grep(/^ *[^#\s]/).join).to eq(<<~YAML)
+          Metrics/ClassLength:
+            Exclude:
+              - 'file.rb'
+          Style/FrozenStringLiteralComment:
+            Exclude:
+              - 'file.rb'
+        YAML
+        expect(cli.run([])).to eq(0)
+      end
     end
   end
 end

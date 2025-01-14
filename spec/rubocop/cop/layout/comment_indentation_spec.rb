@@ -45,8 +45,8 @@ RSpec.describe RuboCop::Cop::Layout::CommentIndentation, :config do
         | ^^^^^^^^^ Incorrect indentation detected (column 1 instead of 0).
         RUBY
 
-        expect_correction(<<-RUBY.strip_margin('|'))
-        |# comment
+        expect_correction(<<~RUBY)
+          # comment
         RUBY
       end
 
@@ -56,8 +56,8 @@ RSpec.describe RuboCop::Cop::Layout::CommentIndentation, :config do
         |  ^^^^^^^^^ Incorrect indentation detected (column 2 instead of 0).
         RUBY
 
-        expect_correction(<<-RUBY.strip_margin('|'))
-        |# comment
+        expect_correction(<<~RUBY)
+          # comment
         RUBY
       end
 
@@ -113,6 +113,13 @@ RSpec.describe RuboCop::Cop::Layout::CommentIndentation, :config do
               b
             end
             # this is accepted
+            case a
+            # this is accepted
+            in 0
+              #
+              b
+            end
+            # this is accepted
           rescue
           # this is accepted
           ensure
@@ -164,7 +171,6 @@ RSpec.describe RuboCop::Cop::Layout::CommentIndentation, :config do
     end
 
     it 'registers an offense and corrects' do
-      # FIXME
       expect_offense(<<~RUBY)
          # comment 1
          # comment 2
@@ -197,6 +203,19 @@ RSpec.describe RuboCop::Cop::Layout::CommentIndentation, :config do
              #
              ^ Incorrect indentation detected (column 5 instead of 4).
             b
+          when 2
+            # this is also accepted
+          end
+          case a
+          # this is accepted
+          in 0
+            # so is this
+          in 1
+          #
+          ^ Incorrect indentation detected (column 2 instead of 4).
+            b
+          in 2
+            # this is also accepted
           end
       RUBY
 
@@ -226,6 +245,18 @@ RSpec.describe RuboCop::Cop::Layout::CommentIndentation, :config do
           when 1
             #
             b
+          when 2
+            # this is also accepted
+          end
+          case a
+          # this is accepted
+          in 0
+            # so is this
+          in 1
+            #
+            b
+          in 2
+            # this is also accepted
           end
       RUBY
     end
@@ -294,7 +325,6 @@ RSpec.describe RuboCop::Cop::Layout::CommentIndentation, :config do
   end
 
   context 'when `Layout/AccessModifierIndentation EnforcedStyle: outdent`' do
-    let(:allow_for_alignment) { true }
     let(:indentation_width) { 2 }
     let(:config) do
       RuboCop::Config.new(

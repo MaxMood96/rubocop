@@ -2,7 +2,12 @@
 
 RSpec.describe RuboCop::Cop::Style::RedundantArgument, :config do
   let(:cop_config) do
-    { 'Methods' => { 'join' => '', 'sum' => 0, 'split' => ' ', 'chomp' => "\n", 'chomp!' => "\n" } }
+    {
+      'Methods' => {
+        'join' => '', 'sum' => 0, 'exit' => true, 'exit!' => false,
+        'split' => ' ', 'chomp' => "\n", 'chomp!' => "\n"
+      }
+    }
   end
 
   it 'registers an offense and corrects when method called on variable' do
@@ -11,6 +16,10 @@ RSpec.describe RuboCop::Cop::Style::RedundantArgument, :config do
               ^^^^ Argument '' is redundant because it is implied by default.
       foo.sum(0)
              ^^^ Argument 0 is redundant because it is implied by default.
+      exit(true)
+          ^^^^^^ Argument true is redundant because it is implied by default.
+      exit!(false)
+           ^^^^^^^ Argument false is redundant because it is implied by default.
       foo.split(' ')
                ^^^^^ Argument ' ' is redundant because it is implied by default.
       foo.chomp("\n")
@@ -22,9 +31,34 @@ RSpec.describe RuboCop::Cop::Style::RedundantArgument, :config do
     expect_correction(<<~RUBY)
       foo.join
       foo.sum
+      exit
+      exit!
       foo.split
       foo.chomp
       foo.chomp!
+    RUBY
+  end
+
+  it 'registers an offense and corrects when safe navigation method called on variable' do
+    expect_offense(<<~'RUBY')
+      foo&.join('')
+               ^^^^ Argument '' is redundant because it is implied by default.
+      foo&.sum(0)
+              ^^^ Argument 0 is redundant because it is implied by default.
+      foo&.split(' ')
+                ^^^^^ Argument ' ' is redundant because it is implied by default.
+      foo&.chomp("\n")
+                ^^^^^^ Argument "\n" is redundant because it is implied by default.
+      foo&.chomp!("\n")
+                 ^^^^^^ Argument "\n" is redundant because it is implied by default.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo&.join
+      foo&.sum
+      foo&.split
+      foo&.chomp
+      foo&.chomp!
     RUBY
   end
 
@@ -79,6 +113,36 @@ RSpec.describe RuboCop::Cop::Style::RedundantArgument, :config do
       foo.join
       "first second".split
     RUBY
+  end
+
+  it 'does not register an offense when single-quoted strings for newline cntrl character' do
+    expect_no_offenses(<<~'RUBY')
+      foo.chomp('\n')
+      foo.chomp!('\n')
+    RUBY
+  end
+
+  it 'does not fail on invalid encoding of string literal' do
+    expect_no_offenses(<<~'RUBY')
+      foo.chomp("\x82")
+    RUBY
+  end
+
+  context 'with invalid encoding of string literal configured as default argument' do
+    let(:cop_config) do
+      {
+        'Methods' => {
+          'chomp' => "\x82"
+        }
+      }
+    end
+
+    it 'registers an offense' do
+      expect_offense(<<~'RUBY')
+        foo.chomp("\x82")
+                 ^^^^^^^^ Argument "\x82" is redundant because it is implied by default.
+      RUBY
+    end
   end
 
   it 'does not register an offense when method called with no arguments' do

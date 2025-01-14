@@ -40,6 +40,34 @@ RSpec.describe RuboCop::Cop::Style::RedundantCondition, :config do
         RUBY
       end
 
+      it 'registers an offense and does not autocorrect when if branch has a comment' do
+        expect_offense(<<~RUBY)
+          if b
+          ^^^^ Use double pipes `||` instead.
+            # Important note.
+            b
+          else
+            c
+          end
+        RUBY
+
+        expect_no_corrections
+      end
+
+      it 'registers an offense and does not autocorrect when else branch has a comment' do
+        expect_offense(<<~RUBY)
+          if b
+          ^^^^ Use double pipes `||` instead.
+            b
+          else
+            # Important note.
+            c
+          end
+        RUBY
+
+        expect_no_corrections
+      end
+
       it 'does not register an offense when using assignment by hash key access' do
         expect_no_offenses(<<~RUBY)
           if @cache[key]
@@ -62,6 +90,36 @@ RSpec.describe RuboCop::Cop::Style::RedundantCondition, :config do
 
         expect_correction(<<~RUBY)
           b || raise('foo')
+        RUBY
+      end
+
+      it 'registers an offense with extra parentheses and modifier `if` in `else`' do
+        expect_offense(<<~RUBY)
+          if b
+          ^^^^ Use double pipes `||` instead.
+            b
+          else
+            ('foo' if $VERBOSE)
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          b || ('foo' if $VERBOSE)
+        RUBY
+      end
+
+      it 'registers an offense with double extra parentheses and modifier `if` in `else`' do
+        expect_offense(<<~RUBY)
+          if b
+          ^^^^ Use double pipes `||` instead.
+            b
+          else
+            (('foo' if $VERBOSE))
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          b || (('foo' if $VERBOSE))
         RUBY
       end
 
@@ -178,14 +236,15 @@ RSpec.describe RuboCop::Cop::Style::RedundantCondition, :config do
         RUBY
       end
 
-      it 'registers an offense and corrects when using modifier if' do
-        expect_offense(<<~RUBY)
+      it 'does not register an offense when using modifier `if`' do
+        expect_no_offenses(<<~RUBY)
           bar if bar
-          ^^^^^^^^^^ This condition is not needed.
         RUBY
+      end
 
-        expect_correction(<<~RUBY)
-          bar
+      it 'does not register an offense when using modifier `unless`' do
+        expect_no_offenses(<<~RUBY)
+          bar unless bar
         RUBY
       end
 
@@ -433,7 +492,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantCondition, :config do
         RUBY
       end
 
-      it 'does not register an offense when the branches contains arguments fowarding', :ruby27 do
+      it 'does not register an offense when the branches contains arguments forwarding', :ruby27 do
         expect_no_offenses(<<~RUBY)
           def do_something(foo, ...)
             if foo
@@ -517,6 +576,17 @@ RSpec.describe RuboCop::Cop::Style::RedundantCondition, :config do
       expect_no_offenses('b ? d : c')
     end
 
+    it 'registers an offense with extra parentheses and modifier `if` in `else`' do
+      expect_offense(<<~RUBY)
+        b ? b : (raise 'foo' if $VERBOSE)
+          ^^^^^ Use double pipes `||` instead.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        b || (raise 'foo' if $VERBOSE)
+      RUBY
+    end
+
     context 'when condition and if_branch are same' do
       it 'registers an offense and corrects' do
         expect_offense(<<~RUBY)
@@ -526,6 +596,17 @@ RSpec.describe RuboCop::Cop::Style::RedundantCondition, :config do
 
         expect_correction(<<~RUBY)
           b || c
+        RUBY
+      end
+
+      it 'registers an offense and corrects with empty arguments' do
+        expect_offense(<<~RUBY)
+          test ? test : Proc.new {}
+               ^^^^^^^^ Use double pipes `||` instead.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          test || Proc.new {}
         RUBY
       end
 

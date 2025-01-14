@@ -36,37 +36,152 @@ RSpec.describe RuboCop::Cop::Style::ClassEqualityComparison, :config do
     RUBY
   end
 
-  it 'registers an offense and corrects when comparing single quoted class name for equality' do
-    expect_offense(<<~RUBY)
-      var.class.name == 'Date'
-          ^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
-    RUBY
+  context 'when using `Class#name`' do
+    it 'registers an offense and corrects when comparing single quoted class name for equality' do
+      expect_offense(<<~RUBY)
+        var.class.name == 'Date'
+            ^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
 
-    expect_correction(<<~RUBY)
-      var.instance_of?(Date)
-    RUBY
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
+
+    it 'registers an offense and corrects when comparing `Module#name` for equality' do
+      expect_offense(<<~RUBY)
+        var.class.name == Date.name
+            ^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
+
+    it 'registers an offense and corrects when comparing double quoted class name for equality' do
+      expect_offense(<<~RUBY)
+        var.class.name == "Date"
+            ^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
+
+    it 'does not register an offense when comparing interpolated string class name for equality' do
+      expect_no_offenses(<<~'RUBY')
+        var.class.name == "String#{interpolation}"
+      RUBY
+    end
+
+    it 'registers an offense but does not correct when comparing local variable for equality' do
+      expect_offense(<<~RUBY)
+        class_name = 'Model'
+        var.class.name == class_name
+            ^^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?` instead of comparing classes.
+      RUBY
+
+      expect_no_corrections
+    end
+
+    it 'registers an offense but does not correct when comparing instance variable for equality' do
+      expect_offense(<<~RUBY)
+        var.class.name == @class_name
+            ^^^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?` instead of comparing classes.
+      RUBY
+
+      expect_no_corrections
+    end
+
+    it 'registers an offense but does not correct when comparing method call for equality' do
+      expect_offense(<<~RUBY)
+        var.class.name == class_name
+            ^^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?` instead of comparing classes.
+      RUBY
+
+      expect_no_corrections
+    end
+
+    it 'registers an offense but does not correct when comparing safe navigation method call for equality' do
+      expect_offense(<<~RUBY)
+        var.class.name == obj&.class_name
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?` instead of comparing classes.
+      RUBY
+
+      expect_no_corrections
+    end
   end
 
-  it 'registers an offense and corrects when comparing `Module#name` for equality' do
-    expect_offense(<<~RUBY)
-      var.class.name == Date.name
-          ^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
-    RUBY
+  context 'when using `Class#to_s`' do
+    it 'registers an offense and corrects when comparing single quoted class name for equality' do
+      expect_offense(<<~RUBY)
+        var.class.to_s == 'Date'
+            ^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
 
-    expect_correction(<<~RUBY)
-      var.instance_of?(Date)
-    RUBY
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
+
+    it 'registers an offense and corrects when comparing `Module#name` for equality' do
+      expect_offense(<<~RUBY)
+        var.class.to_s == Date.to_s
+            ^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
+
+    it 'registers an offense and corrects when comparing double quoted class name for equality' do
+      expect_offense(<<~RUBY)
+        var.class.to_s == "Date"
+            ^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
   end
 
-  it 'registers an offense and corrects when comparing double quoted class name for equality' do
-    expect_offense(<<~RUBY)
-      var.class.name == "Date"
-          ^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
-    RUBY
+  context 'when using `Class#inspect`' do
+    it 'registers an offense and corrects when comparing single quoted class name for equality' do
+      expect_offense(<<~RUBY)
+        var.class.inspect == 'Date'
+            ^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
 
-    expect_correction(<<~RUBY)
-      var.instance_of?(Date)
-    RUBY
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
+
+    it 'registers an offense and corrects when comparing `Module#name` for equality' do
+      expect_offense(<<~RUBY)
+        var.class.inspect == Date.inspect
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
+
+    it 'registers an offense and corrects when comparing double quoted class name for equality' do
+      expect_offense(<<~RUBY)
+        var.class.inspect == "Date"
+            ^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Date)` instead of comparing classes.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        var.instance_of?(Date)
+      RUBY
+    end
   end
 
   it 'does not register an offense when using `instance_of?`' do
@@ -133,8 +248,8 @@ RSpec.describe RuboCop::Cop::Style::ClassEqualityComparison, :config do
       expect_offense(<<~RUBY)
         module Foo
           def bar?(value)
-            bar.class.name == @class_name
-                ^^^^^^^^^^^^^^^^^^^^^^^^^ Use `instance_of?(@class_name)` instead of comparing classes.
+            bar.class.name == Model
+                ^^^^^^^^^^^^^^^^^^^ Use `instance_of?(Model)` instead of comparing classes.
           end
         end
       RUBY
@@ -142,7 +257,7 @@ RSpec.describe RuboCop::Cop::Style::ClassEqualityComparison, :config do
       expect_correction(<<~RUBY)
         module Foo
           def bar?(value)
-            bar.instance_of?(@class_name)
+            bar.instance_of?(Model)
           end
         end
       RUBY

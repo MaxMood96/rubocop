@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
-require 'base64'
 require 'cgi'
 require 'erb'
-require 'ostruct'
 
 module RuboCop
   module Formatter
@@ -11,6 +9,7 @@ module RuboCop
     class HTMLFormatter < BaseFormatter
       ELLIPSES = '<span class="extra-code">...</span>'
       TEMPLATE_PATH = File.expand_path('../../../assets/output.html.erb', __dir__)
+      CSS_PATH = File.expand_path('../../../assets/output.css.erb', __dir__)
 
       Color = Struct.new(:red, :green, :blue, :alpha) do
         def to_s
@@ -52,8 +51,10 @@ module RuboCop
         context = ERBContext.new(files, summary)
 
         template = File.read(TEMPLATE_PATH, encoding: Encoding::UTF_8)
-        erb = ERB.new(template, trim_mode: '-')
-        html = erb.result(context.binding)
+        erb = ERB.new(template)
+        html = erb.result(context.binding).lines.map do |line|
+          line.match?(/\A\s*\z/) ? "\n" : line
+        end.join
 
         output.write html
       end
@@ -62,14 +63,6 @@ module RuboCop
       class ERBContext
         include PathUtil
         include TextUtil
-
-        SEVERITY_COLORS = {
-          refactor:   Color.new(0xED, 0x9C, 0x28, 1.0),
-          convention: Color.new(0xED, 0x9C, 0x28, 1.0),
-          warning:    Color.new(0x96, 0x28, 0xEF, 1.0),
-          error:      Color.new(0xD2, 0x32, 0x2D, 1.0),
-          fatal:      Color.new(0xD2, 0x32, 0x2D, 1.0)
-        }.freeze
 
         LOGO_IMAGE_PATH = File.expand_path('../../../assets/logo.png', __dir__)
 
@@ -88,7 +81,7 @@ module RuboCop
         # rubocop:enable Lint/UselessMethodDefinition
 
         def decorated_message(offense)
-          offense.message.gsub(/`(.+?)`/) { "<code>#{Regexp.last_match(1)}</code>" }
+          offense.message.gsub(/`(.+?)`/) { "<code>#{escape(Regexp.last_match(1))}</code>" }
         end
 
         def highlighted_source_line(offense)
@@ -124,8 +117,38 @@ module RuboCop
 
         def base64_encoded_logo_image
           image = File.read(LOGO_IMAGE_PATH, binmode: true)
-          Base64.encode64(image)
+
+          # `Base64.encode64` compatible:
+          # https://github.com/ruby/base64/blob/v0.1.1/lib/base64.rb#L27-L40
+          [image].pack('m')
         end
+
+        def render_css
+          context = CSSContext.new
+          template = File.read(CSS_PATH, encoding: Encoding::UTF_8)
+          erb = ERB.new(template, trim_mode: '-')
+          erb.result(context.binding).lines.map do |line|
+            line == "\n" ? line : "      #{line}"
+          end.join
+        end
+      end
+
+      # This class provides helper methods used in the ERB CSS template.
+      class CSSContext
+        SEVERITY_COLORS = {
+          refactor:   Color.new(0xED, 0x9C, 0x28, 1.0),
+          convention: Color.new(0xED, 0x9C, 0x28, 1.0),
+          warning:    Color.new(0x96, 0x28, 0xEF, 1.0),
+          error:      Color.new(0xD2, 0x32, 0x2D, 1.0),
+          fatal:      Color.new(0xD2, 0x32, 0x2D, 1.0)
+        }.freeze
+
+        # Make Kernel#binding public.
+        # rubocop:disable Lint/UselessMethodDefinition
+        def binding
+          super
+        end
+        # rubocop:enable Lint/UselessMethodDefinition
       end
     end
   end

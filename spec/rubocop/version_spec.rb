@@ -18,6 +18,10 @@ RSpec.describe RuboCop::Version do
 
       it { is_expected.to match(/\d+\.\d+\.\d+ \(using Parser/) }
     end
+
+    it 'is the gem version when called without arguments' do
+      expect(described_class.version).to eq(described_class::STRING)
+    end
   end
 
   describe '.extension_versions', :isolated_environment, :restore_registry do
@@ -32,7 +36,7 @@ RSpec.describe RuboCop::Version do
       before do
         create_file('.rubocop.yml', <<~YAML)
           AllCops:
-            TargetRubyVersion: 2.6
+            TargetRubyVersion: 2.7
         YAML
       end
 
@@ -132,6 +136,9 @@ RSpec.describe RuboCop::Version do
           rubocop-graphql
           rubocop-md
           rubocop-thread_safety
+          rubocop-capybara
+          rubocop-factory_bot
+          rubocop-rspec_rails
         ]
       end
 

@@ -8,8 +8,11 @@ module RuboCop
       # The default regexp for an acceptable copyright notice can be found in
       # config/default.yml. The default can be changed as follows:
       #
-      #  Style/Copyright:
-      #    Notice: '^Copyright (\(c\) )?2\d{3} Acme Inc'
+      # [source,yaml]
+      # ----
+      # Style/Copyright:
+      #   Notice: '^Copyright (\(c\) )?2\d{3} Acme Inc'
+      # ----
       #
       # This regex string is treated as an unanchored regex. For each file
       # that RuboCop scans, a comment that matches this regex must be found or
@@ -25,17 +28,26 @@ module RuboCop
         def on_new_investigation
           return if notice.empty? || notice_found?(processed_source)
 
-          add_offense(offense_range, message: format(MSG, notice: notice)) do |corrector|
-            verify_autocorrect_notice!
-
-            token = insert_notice_before(processed_source)
-            range = token.nil? ? range_between(0, 0) : token.pos
-
-            corrector.insert_before(range, "#{autocorrect_notice}\n")
+          verify_autocorrect_notice!
+          message = format(MSG, notice: notice)
+          if processed_source.blank?
+            add_global_offense(message)
+          else
+            offense_range = source_range(processed_source.buffer, 1, 0)
+            add_offense(offense_range, message: message) do |corrector|
+              autocorrect(corrector)
+            end
           end
         end
 
         private
+
+        def autocorrect(corrector)
+          token = insert_notice_before(processed_source)
+          range = token.nil? ? range_between(0, 0) : token.pos
+
+          corrector.insert_before(range, "#{autocorrect_notice}\n")
+        end
 
         def notice
           cop_config['Notice']
@@ -45,17 +57,16 @@ module RuboCop
           cop_config['AutocorrectNotice']
         end
 
-        def offense_range
-          source_range(processed_source.buffer, 1, 0)
-        end
-
         def verify_autocorrect_notice!
-          raise Warning, AUTOCORRECT_EMPTY_WARNING if autocorrect_notice.empty?
+          if autocorrect_notice.nil? || autocorrect_notice.empty?
+            raise Warning, "#{cop_name}: #{AUTOCORRECT_EMPTY_WARNING}"
+          end
 
           regex = Regexp.new(notice)
-          return if autocorrect_notice&.match?(regex)
+          return if autocorrect_notice.gsub(/^# */, '').match?(regex)
 
-          raise Warning, "AutocorrectNotice '#{autocorrect_notice}' must match Notice /#{notice}/"
+          message = "AutocorrectNotice '#{autocorrect_notice}' must match Notice /#{notice}/"
+          raise Warning, "#{cop_name}: #{message}"
         end
 
         def insert_notice_before(processed_source)
@@ -69,26 +80,28 @@ module RuboCop
           return false if token_index >= processed_source.tokens.size
 
           token = processed_source.tokens[token_index]
-          token.comment? && /^#!.*$/.match?(token.text)
+          token.comment? && /\A#!.*\z/.match?(token.text)
         end
 
         def encoding_token?(processed_source, token_index)
           return false if token_index >= processed_source.tokens.size
 
           token = processed_source.tokens[token_index]
-          token.comment? && /^#.*coding\s?[:=]\s?(?:UTF|utf)-8/.match?(token.text)
+          token.comment? && /\A#.*coding\s?[:=]\s?(?:UTF|utf)-8/.match?(token.text)
         end
 
         def notice_found?(processed_source)
-          notice_found = false
-          notice_regexp = Regexp.new(notice)
-          processed_source.each_token do |token|
+          notice_regexp = Regexp.new(notice.lines.map(&:strip).join)
+          multiline_notice = +''
+          processed_source.tokens.each do |token|
             break unless token.comment?
 
-            notice_found = notice_regexp.match?(token.text)
-            break if notice_found
+            multiline_notice << token.text.sub(/\A# */, '')
+
+            break if notice_regexp.match?(token.text)
           end
-          notice_found
+
+          multiline_notice.match?(notice_regexp)
         end
       end
     end

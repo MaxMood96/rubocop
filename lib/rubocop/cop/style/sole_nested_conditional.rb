@@ -159,7 +159,13 @@ module RuboCop
           node_to_check = condition&.block_type? ? condition.send_node : condition
           return unless wrap_condition?(node_to_check)
 
-          corrector.wrap(condition, '(', ')')
+          if condition.call_type?
+            source = parenthesized_method_arguments(condition)
+
+            corrector.replace(condition, source)
+          else
+            corrector.wrap(condition, '(', ')')
+          end
         end
 
         def correct_for_outer_condition_modify_form_style(corrector, node, if_branch)
@@ -167,13 +173,15 @@ module RuboCop
           corrector.insert_before(condition,
                                   "#{'!' if node.unless?}#{replace_condition(node.condition)} && ")
 
-          corrector.remove(node.condition.loc.expression)
+          corrector.remove(node.condition)
           corrector.remove(range_with_surrounding_space(node.loc.keyword, newlines: false))
           corrector.replace(if_branch.loc.keyword, 'if')
         end
 
         def correct_for_comment(corrector, node, if_branch)
-          comments = processed_source.ast_with_comments[if_branch]
+          comments = processed_source.ast_with_comments[if_branch].select do |comment|
+            comment.loc.line < if_branch.condition.first_line
+          end
           comment_text = comments.map(&:text).join("\n") << "\n"
 
           corrector.insert_before(node.loc.keyword, comment_text) unless comments.empty?
@@ -186,8 +194,10 @@ module RuboCop
           begin_pos = condition.first_argument.source_range.begin_pos
           return if end_pos > begin_pos
 
-          corrector.replace(range_between(end_pos, begin_pos), '(')
-          corrector.insert_after(condition.last_argument.source_range, ')')
+          range = range_between(end_pos, begin_pos)
+          corrector.remove(range)
+          corrector.insert_after(range, '(')
+          corrector.insert_after(condition.last_argument, ')')
         end
 
         def insert_bang(corrector, node, is_modify_form)
@@ -204,7 +214,7 @@ module RuboCop
         end
 
         def insert_bang_for_and(corrector, node)
-          lhs, rhs = *node
+          lhs, rhs = *node # rubocop:disable InternalAffairs/NodeDestructuring
 
           if lhs.and_type?
             insert_bang_for_and(corrector, lhs)
@@ -227,12 +237,24 @@ module RuboCop
         end
 
         def wrap_condition?(node)
-          node.and_type? || node.or_type? ||
-            (node.call_type? && node.arguments.any? && !node.parenthesized?)
+          node.operator_keyword? || (node.call_type? && node.arguments.any? && !node.parenthesized?)
         end
 
         def replace_condition(condition)
-          wrap_condition?(condition) ? "(#{condition.source})" : condition.source
+          return condition.source unless wrap_condition?(condition)
+
+          if condition.call_type? && !condition.comparison_method?
+            parenthesized_method_arguments(condition)
+          else
+            "(#{condition.source})"
+          end
+        end
+
+        def parenthesized_method_arguments(node)
+          method_call = node.source_range.begin.join(node.loc.selector.end).source
+          arguments = node.first_argument.source_range.begin.join(node.source_range.end).source
+
+          "#{method_call}(#{arguments})"
         end
 
         def allow_modifier?
@@ -240,7 +262,7 @@ module RuboCop
         end
 
         def outer_condition_modify_form?(node, if_branch)
-          node.condition.loc.expression.begin_pos > if_branch.condition.loc.expression.begin_pos
+          node.condition.source_range.begin_pos > if_branch.condition.source_range.begin_pos
         end
       end
     end

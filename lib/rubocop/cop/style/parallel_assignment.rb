@@ -28,25 +28,26 @@ module RuboCop
 
         MSG = 'Do not use parallel assignment.'
 
-        def on_masgn(node)
-          lhs, rhs = *node
-          lhs_elements = *lhs
+        def on_masgn(node) # rubocop:disable Metrics/AbcSize
+          rhs = node.rhs
+          rhs = rhs.body if rhs.rescue_type?
           rhs_elements = Array(rhs).compact # edge case for one constant
 
-          return if allowed_lhs?(lhs) || allowed_rhs?(rhs) ||
-                    allowed_masign?(lhs_elements, rhs_elements)
+          return if allowed_lhs?(node.assignments) || allowed_rhs?(rhs) ||
+                    allowed_masign?(node.assignments, rhs_elements)
 
-          add_offense(node) { |corrector| autocorrect(corrector, node) }
+          range = node.source_range.begin.join(rhs.source_range.end)
+
+          add_offense(range) do |corrector|
+            autocorrect(corrector, node, rhs)
+          end
         end
 
         private
 
-        def autocorrect(corrector, node)
-          left, right = *node
-          left_elements = *left
-          right_elements = Array(right).compact
-          order = find_valid_order(left_elements, right_elements)
-          correction = assignment_corrector(node, order)
+        def autocorrect(corrector, node, rhs)
+          order = find_valid_order(node.assignments, Array(rhs).compact)
+          correction = assignment_corrector(node, rhs, order)
 
           corrector.replace(correction.correction_range, correction.correction)
         end
@@ -57,9 +58,7 @@ module RuboCop
                               add_self_to_getters(rhs_elements))
         end
 
-        def allowed_lhs?(node)
-          elements = *node
-
+        def allowed_lhs?(elements)
           # Account for edge cases using one variable with a comma
           # E.g.: `foo, = *bar`
           elements.one? || elements.any?(&:splat_type?)
@@ -77,14 +76,19 @@ module RuboCop
           node.block_type? || node.send_type?
         end
 
-        def assignment_corrector(node, order)
-          _assignment, modifier = *node.parent
-          if modifier_statement?(node.parent)
-            ModifierCorrector.new(node, config, order)
-          elsif rescue_modifier?(modifier)
-            RescueCorrector.new(node, config, order)
+        def assignment_corrector(node, rhs, order)
+          if node.parent&.rescue_type?
+            _assignment, modifier = *node.parent
           else
-            GenericCorrector.new(node, config, order)
+            _assignment, modifier = *rhs.parent
+          end
+
+          if modifier_statement?(node.parent)
+            ModifierCorrector.new(node, rhs, modifier, config, order)
+          elsif rescue_modifier?(modifier)
+            RescueCorrector.new(node, rhs, modifier, config, order)
+          else
+            GenericCorrector.new(node, rhs, modifier, config, order)
           end
         end
 
@@ -133,8 +137,8 @@ module RuboCop
             @assignments = assignments
           end
 
-          def tsort_each_node(&block)
-            @assignments.each(&block)
+          def tsort_each_node(...)
+            @assignments.each(...)
           end
 
           def tsort_each_child(assignment)
@@ -181,10 +185,12 @@ module RuboCop
         class GenericCorrector
           include Alignment
 
-          attr_reader :config, :node
+          attr_reader :node, :rhs, :rescue_result, :config
 
-          def initialize(node, config, new_elements)
+          def initialize(node, rhs, modifier, config, new_elements)
             @node = node
+            @rhs = rhs
+            _, _, @rescue_result = *modifier
             @config = config
             @new_elements = new_elements
           end
@@ -200,15 +206,16 @@ module RuboCop
           protected
 
           def assignment
-            @new_elements.map { |lhs, rhs| "#{lhs.source} = #{source(rhs)}" }
+            @new_elements.map { |lhs, rhs| "#{lhs.source} = #{source(rhs, rhs.loc)}" }
           end
 
           private
 
-          def source(node)
-            if node.str_type? && node.loc.begin.nil?
+          def source(node, loc)
+            # __FILE__ is treated as a StrNode but has no begin
+            if node.str_type? && loc.respond_to?(:begin) && loc.begin.nil?
               "'#{node.source}'"
-            elsif node.sym_type? && node.loc.begin.nil?
+            elsif node.sym_type? && loc.begin.nil?
               ":#{node.source}"
             else
               node.source
@@ -228,13 +235,10 @@ module RuboCop
         # protected by rescue
         class RescueCorrector < GenericCorrector
           def correction
-            _node, rescue_clause = *node.parent
-            _, _, rescue_result = *rescue_clause
-
             # If the parallel assignment uses a rescue modifier and it is the
             # only contents of a method, then we want to make use of the
             # implicit begin
-            if node.parent.parent&.def_type?
+            if rhs.parent.parent.parent&.def_type?
               super + def_correction(rescue_result)
             else
               begin_correction(rescue_result)
@@ -242,7 +246,7 @@ module RuboCop
           end
 
           def correction_range
-            node.parent.source_range
+            rhs.parent.parent.source_range
           end
 
           private
@@ -281,9 +285,7 @@ module RuboCop
           private
 
           def modifier_range(node)
-            Parser::Source::Range.new(node.source_range.source_buffer,
-                                      node.loc.keyword.begin_pos,
-                                      node.source_range.end_pos)
+            node.loc.keyword.join(node.source_range.end)
           end
         end
       end

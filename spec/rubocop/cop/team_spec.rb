@@ -21,11 +21,11 @@ RSpec.describe RuboCop::Cop::Team do
       source = <<~'RUBY'
         foo.map{ |a| a.nil? }
 
-        'foo' +
-          'bar' +
-          "#{baz}"
+        puts 'foo' +
+             'bar' +
+             "#{baz}"
 
-        i=i+1
+        i+1
 
         def a
           self::b
@@ -36,11 +36,11 @@ RSpec.describe RuboCop::Cop::Team do
 
         foo.map(&:nil?)
 
-        'foo' \
-          'bar' \
-          "#{baz}"
+        puts 'foo' \
+             'bar' \
+             "#{baz}"
 
-        i += 1
+        i
 
         def a
           b
@@ -56,13 +56,13 @@ RSpec.describe RuboCop::Cop::Team do
   describe '#autocorrect?' do
     subject { team.autocorrect? }
 
-    context 'when the option argument of .new is omitted' do
-      subject { described_class.new(cop_classes, config).autocorrect? }
+    context 'when the option argument of .mobilize is omitted' do
+      subject { described_class.mobilize(cop_classes, config).autocorrect? }
 
       it { is_expected.to be_falsey }
     end
 
-    context 'when { autocorrect: true } is passed to .new' do
+    context 'when { autocorrect: true } is passed to .mobilize' do
       let(:options) { { autocorrect: true } }
 
       it { is_expected.to be_truthy }
@@ -72,13 +72,13 @@ RSpec.describe RuboCop::Cop::Team do
   describe '#debug?' do
     subject { team.debug? }
 
-    context 'when the option argument of .new is omitted' do
-      subject { described_class.new(cop_classes, config).debug? }
+    context 'when the option argument of .mobilize is omitted' do
+      subject { described_class.mobilize(cop_classes, config).debug? }
 
       it { is_expected.to be_falsey }
     end
 
-    context 'when { debug: true } is passed to .new' do
+    context 'when { debug: true } is passed to .mobilize' do
       let(:options) { { debug: true } }
 
       it { is_expected.to be_truthy }
@@ -88,9 +88,11 @@ RSpec.describe RuboCop::Cop::Team do
   describe '#inspect_file', :isolated_environment do
     include FileHelper
 
-    let(:file_path) { '/tmp/example.rb' }
+    let(:file_path) { 'example.rb' }
     let(:source) do
-      source = RuboCop::ProcessedSource.from_file(file_path, ruby_version)
+      source = RuboCop::ProcessedSource.from_file(
+        file_path, ruby_version, parser_engine: parser_engine
+      )
       source.config = config
       source.registry = RuboCop::Cop::Registry.new(cop_classes.cops)
       source
@@ -100,7 +102,7 @@ RSpec.describe RuboCop::Cop::Team do
     before { create_file(file_path, ['#' * 90, 'puts test;']) }
 
     it 'returns offenses' do
-      expect(offenses.empty?).to be(false)
+      expect(offenses).not_to be_empty
       expect(offenses).to all(be_a(RuboCop::Cop::Offense))
     end
 
@@ -110,11 +112,11 @@ RSpec.describe RuboCop::Cop::Team do
       let(:cop_names) { offenses.map(&:cop_name) }
 
       it 'returns Parser warning offenses' do
-        expect(cop_names.include?('Lint/AmbiguousOperator')).to be(true)
+        expect(cop_names).to include('Lint/AmbiguousOperator')
       end
 
       it 'returns offenses from cops' do
-        expect(cop_names.include?('Layout/LineLength')).to be(true)
+        expect(cop_names).to include('Layout/LineLength')
       end
 
       context 'when a cop has no interest in the file' do
@@ -122,8 +124,8 @@ RSpec.describe RuboCop::Cop::Team do
           allow_any_instance_of(RuboCop::Cop::Layout::LineLength)
             .to receive(:excluded_file?).and_return(true)
 
-          expect(cop_names.include?('Lint/AmbiguousOperator')).to be(true)
-          expect(cop_names.include?('Layout/LineLength')).to be(false)
+          expect(cop_names).to include('Lint/AmbiguousOperator')
+          expect(cop_names).not_to include('Layout/LineLength')
         end
       end
     end
@@ -160,7 +162,7 @@ RSpec.describe RuboCop::Cop::Team do
       it 'no error occurs' do
         team.inspect_file(source)
 
-        expect(team.errors.empty?).to be(true)
+        expect(team.errors).to be_empty
       end
     end
 
@@ -175,14 +177,38 @@ RSpec.describe RuboCop::Cop::Team do
 
       let(:error_message) do
         'An error occurred while Style/NumericLiterals cop was inspecting ' \
-          '/tmp/example.rb:1:0.'
+          'example.rb:1:0.'
       end
 
       it 'records Team#errors' do
         team.inspect_file(source)
 
         expect(team.errors).to eq([error_message])
-        expect($stderr.string.include?(error_message)).to be(true)
+        expect($stderr.string).to include(error_message)
+      end
+    end
+
+    context "when a cop's joining forces callback raises an error" do
+      include_context 'mock console output'
+      before do
+        allow_any_instance_of(RuboCop::Cop::Lint::ShadowedArgument)
+          .to receive(:after_leaving_scope).and_raise(exception_message)
+
+        create_file(file_path, 'foo { |bar| bar = 42 }')
+      end
+
+      let(:options) { { debug: true } }
+      let(:exception_message) { 'my message' }
+      let(:error_message) do
+        'An error occurred while Lint/ShadowedArgument cop was inspecting example.rb.'
+      end
+
+      it 'records Team#errors' do
+        team.inspect_file(source)
+
+        expect(team.errors).to eq([error_message])
+        expect($stderr.string).to include(error_message)
+        expect($stdout.string).to include(exception_message)
       end
     end
 
@@ -198,21 +224,21 @@ RSpec.describe RuboCop::Cop::Team do
         RUBY
       end
 
-      let(:file_path) { '/tmp/Gemfile' }
+      let(:file_path) { 'Gemfile' }
 
-      let(:buggy_correction) { ->(_corrector) do raise cause end }
+      let(:buggy_correction) { ->(_corrector) { raise cause } }
       let(:options) { { autocorrect: true } }
 
       let(:cause) { StandardError.new('cause') }
 
       let(:error_message) do
         'An error occurred while Bundler/OrderedGems cop was inspecting ' \
-          '/tmp/Gemfile.'
+          'Gemfile.'
       end
 
       it 'records Team#errors' do
         team.inspect_file(source)
-        expect($stderr.string.include?(error_message)).to be(true)
+        expect($stderr.string).to include(error_message)
       end
     end
 
@@ -230,7 +256,7 @@ RSpec.describe RuboCop::Cop::Team do
         before = team.cops.dup
         team.inspect_file(source)
         team.inspect_file(source)
-        expect(team.cops).to match_array([be(before.first), be_a(RuboCop::Cop::Base)])
+        expect(team.cops).to contain_exactly(be(before.first), be_a(RuboCop::Cop::Base))
         expect(team.cops.last).not_to be(before.last)
       end
     end
@@ -240,8 +266,8 @@ RSpec.describe RuboCop::Cop::Team do
     subject(:cops) { team.cops }
 
     it 'returns cop instances' do
-      expect(cops.empty?).to be(false)
-      expect(cops.all?(RuboCop::Cop::Base)).to be_truthy
+      expect(cops).not_to be_empty
+      expect(cops).to be_all(RuboCop::Cop::Base)
     end
 
     context 'when only some cop classes are passed to .new' do
@@ -251,7 +277,7 @@ RSpec.describe RuboCop::Cop::Team do
 
       it 'returns only instances of the classes' do
         expect(cops.size).to eq(2)
-        cops.sort! { |a, b| a.name <=> b.name }
+        cops.sort_by!(&:name)
         expect(cops[0].name).to eq('Layout/LineLength')
         expect(cops[1].name).to eq('Lint/Void')
       end
@@ -264,9 +290,9 @@ RSpec.describe RuboCop::Cop::Team do
     let(:cop_classes) { RuboCop::Cop::Registry.global }
 
     it 'returns force instances' do
-      expect(forces.empty?).to be(false)
+      expect(forces).not_to be_empty
 
-      forces.each { |force| expect(force.is_a?(RuboCop::Cop::Force)).to be(true) }
+      expect(forces).to all(be_a(RuboCop::Cop::Force))
     end
 
     context 'when a cop joined a force' do
@@ -274,7 +300,7 @@ RSpec.describe RuboCop::Cop::Team do
 
       it 'returns the force' do
         expect(forces.size).to eq(1)
-        expect(forces.first.is_a?(RuboCop::Cop::VariableForce)).to be(true)
+        expect(forces.first).to be_a(RuboCop::Cop::VariableForce)
       end
     end
 
@@ -297,7 +323,7 @@ RSpec.describe RuboCop::Cop::Team do
       let(:cop_classes) { RuboCop::Cop::Registry.new([RuboCop::Cop::Style::For]) }
 
       it 'returns nothing' do
-        expect(forces.empty?).to be(true)
+        expect(forces).to be_empty
       end
     end
   end
@@ -306,14 +332,14 @@ RSpec.describe RuboCop::Cop::Team do
     let(:cop_classes) { RuboCop::Cop::Registry.new }
 
     it 'does not error with no cops' do
-      expect(team.external_dependency_checksum.is_a?(String)).to be(true)
+      expect(team.external_dependency_checksum).to be_a(String)
     end
 
     context 'when a cop joins' do
       let(:cop_classes) { RuboCop::Cop::Registry.new([RuboCop::Cop::Lint::UselessAssignment]) }
 
       it 'returns string' do
-        expect(team.external_dependency_checksum.is_a?(String)).to be(true)
+        expect(team.external_dependency_checksum).to be_a(String)
       end
     end
 
@@ -328,7 +354,7 @@ RSpec.describe RuboCop::Cop::Team do
       end
 
       it 'returns string' do
-        expect(team.external_dependency_checksum.is_a?(String)).to be(true)
+        expect(team.external_dependency_checksum).to be_a(String)
       end
     end
 
@@ -363,7 +389,9 @@ RSpec.describe RuboCop::Cop::Team do
   describe '.new' do
     it 'calls mobilize when passed classes' do
       expect(described_class).to receive(:mobilize).with(cop_classes, config, options)
-      described_class.new(cop_classes, config, options)
+      expect do
+        described_class.new(cop_classes, config, options)
+      end.to output(/Use `Team.mobilize` instead/).to_stderr
     end
 
     it 'accepts cops directly classes' do

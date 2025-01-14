@@ -32,12 +32,14 @@ RSpec.describe 'rubocop --server', :isolated_environment do # rubocop:disable RS
 
         options = '--server --only Style/FrozenStringLiteralComment,Style/StringLiterals'
         expect(`ruby -I . "#{rubocop}" #{options}`).to start_with('RuboCop server starting on')
-        # Emulating RuboCop updates. `0.99.9` is a version value for testing that
-        # will never be used in the real world RuboCop version.
-        RuboCop::Server::Cache.write_version_file('0.99.9')
+
+        # Emulate the server starting with an older RuboCop version.
+        stub_const('RuboCop::Version::STRING', '0.0.1')
+        RuboCop::Server::Cache.write_version_file(RuboCop::Server::Cache.restart_key)
 
         expect(`ruby -I . "#{rubocop}" --server-status`).to match(/RuboCop server .* is running/)
-        expect(`ruby -I . "#{rubocop}" #{options}`).to start_with(
+        _stdout, stderr, _status = Open3.capture3("ruby -I . \"#{rubocop}\" #{options}")
+        expect(stderr).to start_with(
           'RuboCop version incompatibility found, RuboCop server restarting...'
         )
       end
@@ -55,7 +57,7 @@ RSpec.describe 'rubocop --server', :isolated_environment do # rubocop:disable RS
           '--stdin', 'example.rb',
           stdin_data: 'puts 0'
         )
-        expect(status.success?).to be true
+        expect(status).to be_success
         expect(stdout).to eq(<<~RUBY)
           # frozen_string_literal: true
 
@@ -119,6 +121,34 @@ RSpec.describe 'rubocop --server', :isolated_environment do # rubocop:disable RS
           stdout, _stderr, _status = Open3.capture3(
             'ruby', '-I', '.',
             rubocop, '--server', '--format', 'j', '--stdin', 'example.rb', stdin_data: 'puts 0'
+          )
+          expect(stdout).not_to start_with 'RuboCop server starting on '
+        end
+      end
+
+      context 'when `-f json`' do
+        it 'does not display the server start message' do
+          create_file('example.rb', <<~RUBY)
+            puts 0
+          RUBY
+
+          stdout, _stderr, _status = Open3.capture3(
+            'ruby', '-I', '.',
+            rubocop, '--server', '-f', 'json', '--stdin', 'example.rb', stdin_data: 'puts 0'
+          )
+          expect(stdout).not_to start_with 'RuboCop server starting on '
+        end
+      end
+
+      context 'when `-f j`' do
+        it 'does not display the server start message' do
+          create_file('example.rb', <<~RUBY)
+            puts 0
+          RUBY
+
+          stdout, _stderr, _status = Open3.capture3(
+            'ruby', '-I', '.',
+            rubocop, '--server', '-f', 'j', '--stdin', 'example.rb', stdin_data: 'puts 0'
           )
           expect(stdout).not_to start_with 'RuboCop server starting on '
         end
@@ -189,6 +219,9 @@ RSpec.describe 'rubocop --server', :isolated_environment do # rubocop:disable RS
         expect(`ruby -I . "#{rubocop}" --server-status`).to(
           match(/RuboCop server .* is running/), debug_output.join("\n")
         )
+
+        # Recompute the cache key with the modified .rubocop.yml content.
+        RuboCop::Server::Cache.write_version_file(RuboCop::Server::Cache.restart_key)
 
         message = expect(`ruby -I . "#{rubocop}" --server`)
         message.not_to start_with('RuboCop server starting on '), debug_output.join("\n")

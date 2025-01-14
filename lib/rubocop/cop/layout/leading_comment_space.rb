@@ -49,21 +49,61 @@ module RuboCop
       #   #ruby=2.7.0
       #   #ruby-gemset=myproject
       #
+      # @example AllowRBSInlineAnnotation: false (default)
+      #
+      #   # bad
+      #
+      #   include Enumerable #[Integer]
+      #
+      #   attr_reader :name #: String
+      #   attr_reader :age  #: Integer?
+      #
+      # @example AllowRBSInlineAnnotation: true
+      #
+      #   # good
+      #
+      #   include Enumerable #[Integer]
+      #
+      #   attr_reader :name #: String
+      #   attr_reader :age  #: Integer?
+      #
+      # @example AllowSteepAnnotation: false (default)
+      #
+      #   # bad
+      #   [1, 2, 3].each_with_object([]) do |n, list| #$ Array[Integer]
+      #     list << n
+      #   end
+      #
+      #   name = 'John'      #: String
+      #
+      # @example AllowSteepAnnotation: true
+      #
+      #   # good
+      #
+      #   [1, 2, 3].each_with_object([]) do |n, list| #$ Array[Integer]
+      #     list << n
+      #   end
+      #
+      #   name = 'John'      #: String
+      #
       class LeadingCommentSpace < Base
         include RangeHelp
         extend AutoCorrector
 
         MSG = 'Missing space after `#`.'
 
-        def on_new_investigation
+        def on_new_investigation # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
           processed_source.comments.each do |comment|
-            next unless /\A#+[^#\s=+-]/.match?(comment.text)
+            next unless /\A(?!#\+\+|#--)(#+[^#\s=])/.match?(comment.text)
             next if comment.loc.line == 1 && allowed_on_first_line?(comment)
+            next if shebang_continuation?(comment)
             next if doxygen_comment_style?(comment)
             next if gemfile_ruby_comment?(comment)
+            next if rbs_inline_annotation?(comment)
+            next if steep_annotation?(comment)
 
             add_offense(comment) do |corrector|
-              expr = comment.loc.expression
+              expr = comment.source_range
 
               corrector.insert_after(hash_mark(expr), ' ')
             end
@@ -82,6 +122,20 @@ module RuboCop
 
         def shebang?(comment)
           comment.text.start_with?('#!')
+        end
+
+        def shebang_continuation?(comment)
+          return false unless shebang?(comment)
+          return true if comment.loc.line == 1
+
+          previous_line_comment = processed_source.comment_at_line(comment.loc.line - 1)
+          return false unless previous_line_comment
+
+          # If the comment is a shebang but not on the first line, check if the previous
+          # line has a shebang comment that wasn't marked as an offense; if so, this comment
+          # continues the shebang and is acceptable.
+          shebang?(previous_line_comment) &&
+            !current_offense_locations.include?(previous_line_comment.source_range)
         end
 
         def rackup_options?(comment)
@@ -114,6 +168,22 @@ module RuboCop
 
         def gemfile_ruby_comment?(comment)
           allow_gemfile_ruby_comment? && ruby_comment_in_gemfile?(comment)
+        end
+
+        def allow_rbs_inline_annotation?
+          cop_config['AllowRBSInlineAnnotation']
+        end
+
+        def rbs_inline_annotation?(comment)
+          allow_rbs_inline_annotation? && comment.text.start_with?(/#:|#\[.+\]/)
+        end
+
+        def allow_steep_annotation?
+          cop_config['AllowSteepAnnotation']
+        end
+
+        def steep_annotation?(comment)
+          allow_steep_annotation? && comment.text.start_with?(/#[$:]/)
         end
       end
     end

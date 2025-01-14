@@ -131,6 +131,8 @@ module RuboCop
         extend AutoCorrector
 
         MSG = 'Redundant `else`-clause.'
+        NIL_STYLES = %i[nil both].freeze
+        EMPTY_STYLES = %i[empty both].freeze
 
         def on_normal_if_unless(node)
           check(node)
@@ -143,18 +145,18 @@ module RuboCop
         private
 
         def check(node)
-          return if cop_config['AllowComments'] && comment_in_else?(node.loc)
+          return if cop_config['AllowComments'] && comment_in_else?(node)
 
           empty_check(node) if empty_style?
           nil_check(node) if nil_style?
         end
 
         def nil_style?
-          style == :nil || style == :both
+          NIL_STYLES.include?(style)
         end
 
         def empty_style?
-          style == :empty || style == :both
+          EMPTY_STYLES.include?(style)
         end
 
         def empty_check(node)
@@ -171,16 +173,17 @@ module RuboCop
 
         def autocorrect(corrector, node)
           return false if autocorrect_forbidden?(node.type.to_s)
-          return false if comment_in_else?(node.loc)
+          return false if comment_in_else?(node)
 
           end_pos = base_node(node).loc.end.begin_pos
           corrector.remove(range_between(node.loc.else.begin_pos, end_pos))
         end
 
-        def comment_in_else?(loc)
-          return false if loc.else.nil? || loc.end.nil?
+        def comment_in_else?(node)
+          node = node.parent while node.if_type? && node.elsif?
+          return false unless node.else?
 
-          processed_source.contains_comment?(loc.else.join(loc.end))
+          processed_source.contains_comment?(node.loc.else.join(node.source_range.end))
         end
 
         def base_node(node)

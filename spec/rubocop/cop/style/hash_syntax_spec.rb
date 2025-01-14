@@ -68,13 +68,13 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         expect_no_offenses('{}')
       end
 
-      context 'ruby < 2.2', :ruby21 do
+      context 'ruby < 2.2', :ruby21, unsupported_on: :prism do
         it 'accepts hash rockets when symbol keys have string in them' do
           expect_no_offenses('x = { :"string" => 0 }')
         end
       end
 
-      it 'registers an offense when symbol keys have strings in them' do
+      it 'registers an offense when symbol keys have strings in them', :ruby22 do
         expect_offense(<<~RUBY)
           x = { :"string" => 0 }
                 ^^^^^^^^^^^^ Use the new Ruby 1.9 hash syntax.
@@ -208,6 +208,17 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
           RUBY
         end
       end
+
+      it 'registers an offense for implicit `call` method' do
+        expect_offense(<<~RUBY)
+          method(:puts).(:key => value)
+                         ^^^^^^^ Use the new Ruby 1.9 hash syntax.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          method(:puts).(key: value)
+        RUBY
+      end
     end
 
     context 'with SpaceAroundOperators disabled' do
@@ -336,6 +347,17 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         RUBY
       end
     end
+
+    it 'registers an offense for implicit `call` method' do
+      expect_offense(<<~RUBY)
+        method(:puts).(:key=>value)
+                       ^^^^^^ Use the new Ruby 1.9 hash syntax.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        method(:puts).(key: value)
+      RUBY
+    end
   end
 
   context 'configured to enforce hash rockets style' do
@@ -405,6 +427,17 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
       it 'does not register an offense when there is a symbol value' do
         expect_no_offenses('{ :a => :b, :c => :d }')
       end
+    end
+
+    it 'registers an offense for implicit `call` method' do
+      expect_offense(<<~RUBY)
+        method(:puts).(a: 0)
+                       ^^ Use hash rockets syntax.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        method(:puts).(:a => 0)
+      RUBY
     end
   end
 
@@ -478,7 +511,7 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         RUBY
       end
 
-      context 'ruby < 2.2', :ruby21 do
+      context 'ruby < 2.2', :ruby21, unsupported_on: :prism do
         it 'accepts hash rockets when keys have whitespaces in them' do
           expect_no_offenses('x = { :"t o" => 0, :b => 1 }')
         end
@@ -658,7 +691,7 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         RUBY
       end
 
-      context 'ruby < 2.2', :ruby21 do
+      context 'ruby < 2.2', :ruby21, unsupported_on: :prism do
         it 'accepts hash rockets when keys have whitespaces in them' do
           expect_no_offenses('x = { :"t o" => 0, :b => 1 }')
         end
@@ -938,6 +971,25 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         RUBY
       end
 
+      it 'registers and corrects an offense when braced hash key and value are the same and it is used in `if`...`else`' do
+        expect_offense(<<~RUBY)
+          if condition
+            template % {value: value}
+                               ^^^^^ Omit the hash value.
+          else
+            do_something
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          if condition
+            template % {value:}
+          else
+            do_something
+          end
+        RUBY
+      end
+
       it 'registers and corrects an offense when hash key and hash value are the same and it in the method body' do
         expect_offense(<<~RUBY)
           def do_something
@@ -1029,7 +1081,7 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
       it 'does not register an offense when hash key and hash value are the same but the value ends `!`' do
         # Prevents the following syntax error:
         #
-        # % ruby -cve 'def foo! = puts("hi"); {foo!:}'
+        # $ ruby -cve 'def foo! = puts("hi"); {foo!:}'
         # ruby 3.1.0dev (2021-12-05T10:23:42Z master 19f037e452) [x86_64-darwin19]
         # -e:1: identifier foo! is not valid to get
         expect_no_offenses(<<~RUBY)
@@ -1040,7 +1092,7 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
       it 'does not register an offense when hash key and hash value are the same but the value ends `?`' do
         # Prevents the following syntax error:
         #
-        # % ruby -cve 'def foo? = puts("hi"); {foo?:}'
+        # $ ruby -cve 'def foo? = puts("hi"); {foo?:}'
         # ruby 3.1.0dev (2021-12-05T10:23:42Z master 19f037e452) [x86_64-darwin19]
         # -e:1: identifier foo? is not valid to get
         expect_no_offenses(<<~RUBY)
@@ -1101,17 +1153,6 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         RUBY
       end
 
-      it 'registers an offense in chained calls with dispatch keywords' do
-        expect_offense(<<~RUBY)
-          yield(:foo, bar: bar).baz
-                           ^^^ Omit the hash value.
-        RUBY
-
-        expect_correction(<<~RUBY)
-          yield(:foo, bar:).baz
-        RUBY
-      end
-
       it 'registers an offense when without parentheses call expr follows after nested method call' do
         # Add parentheses to prevent syntax errors shown in the URL: https://bugs.ruby-lang.org/issues/18396
         expect_offense(<<~RUBY)
@@ -1151,6 +1192,19 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         expect_correction(<<~RUBY)
           hash[:key] = { foo: }
           bar
+        RUBY
+      end
+
+      it 'registers an offense when expression follows attribute assignment' do
+        expect_offense(<<~RUBY)
+          object.attr = {foo: foo}
+                              ^^^ Omit the hash value.
+          pass
+        RUBY
+
+        expect_correction(<<~RUBY)
+          object.attr = {foo:}
+          pass
         RUBY
       end
 
@@ -1220,43 +1274,56 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         RUBY
       end
 
-      it 'registers an offense when one line `if` condition follows yield (with parentheses)' do
-        expect_offense(<<~RUBY)
-          yield(value: value) unless foo
-                       ^^^^^ Omit the hash value.
-        RUBY
+      context 'Ruby <= 3.2', :ruby32, unsupported_on: :prism do
+        it 'registers an offense in chained calls with dispatch keywords' do
+          expect_offense(<<~RUBY)
+            yield(:foo, bar: bar).baz
+                             ^^^ Omit the hash value.
+          RUBY
 
-        expect_correction(<<~RUBY)
-          yield(value:) unless foo
-        RUBY
-      end
+          expect_correction(<<~RUBY)
+            yield(:foo, bar:).baz
+          RUBY
+        end
 
-      it 'registers an offense in yield followed by ivar assignment (without parentheses)' do
-        expect_offense(<<~RUBY)
-          yield value: value, other: other
-                                     ^^^^^ Omit the hash value.
-                       ^^^^^ Omit the hash value.
-          @ivar = ivar
-        RUBY
+        it 'registers an offense when one line `if` condition follows yield (with parentheses)' do
+          expect_offense(<<~RUBY)
+            yield(value: value) unless foo
+                         ^^^^^ Omit the hash value.
+          RUBY
 
-        expect_correction(<<~RUBY)
-          yield(value:, other:)
-          @ivar = ivar
-        RUBY
-      end
+          expect_correction(<<~RUBY)
+            yield(value:) unless foo
+          RUBY
+        end
 
-      it 'registers an offense in yield followed by expr without parentheses' do
-        expect_offense(<<~RUBY)
-          yield value: value, other: other
-                                     ^^^^^ Omit the hash value.
-                       ^^^^^ Omit the hash value.
-          foo baz
-        RUBY
+        it 'registers an offense in yield followed by ivar assignment (without parentheses)' do
+          expect_offense(<<~RUBY)
+            yield value: value, other: other
+                                       ^^^^^ Omit the hash value.
+                         ^^^^^ Omit the hash value.
+            @ivar = ivar
+          RUBY
 
-        expect_correction(<<~RUBY)
-          yield(value:, other:)
-          foo baz
-        RUBY
+          expect_correction(<<~RUBY)
+            yield(value:, other:)
+            @ivar = ivar
+          RUBY
+        end
+
+        it 'registers an offense in yield followed by expr without parentheses' do
+          expect_offense(<<~RUBY)
+            yield value: value, other: other
+                                       ^^^^^ Omit the hash value.
+                         ^^^^^ Omit the hash value.
+            foo baz
+          RUBY
+
+          expect_correction(<<~RUBY)
+            yield(value:, other:)
+            foo baz
+          RUBY
+        end
       end
 
       it 'does not register an offense when one line `if` condition follows (without parentheses)' do
@@ -1438,7 +1505,22 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
         RUBY
       end
 
-      context 'when hash roket syntax' do
+      it 'registers an offense in calls without parentheses but inside parentheses' do
+        expect_offense(<<~RUBY)
+          (create :foo, bar: bar)
+                             ^^^ Omit the hash value.
+
+          pass
+        RUBY
+
+        expect_correction(<<~RUBY)
+          (create :foo, bar:)
+
+          pass
+        RUBY
+      end
+
+      context 'when hash rocket syntax' do
         let(:enforced_style) { 'hash_rockets' }
 
         it 'does not register an offense' do
@@ -1449,7 +1531,7 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
       end
     end
 
-    context 'Ruby <= 3.0', :ruby30 do
+    context 'Ruby <= 3.0', :ruby30, unsupported_on: :prism do
       it 'does not register an offense when hash key and hash value are the same' do
         expect_no_offenses(<<~RUBY)
           {foo: foo, bar: bar}
@@ -1557,7 +1639,7 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
     end
   end
 
-  context 'configured to disallow mixing of implicit and explicit hash literal value' do
+  context 'configured to disallow mixing of implicit and explicit hash literal value, but prefers shorthand syntax whenever possible' do
     let(:cop_config) do
       {
         'EnforcedStyle' => 'ruby19',
@@ -1620,8 +1702,74 @@ RSpec.describe RuboCop::Cop::Style::HashSyntax, :config do
       end
     end
 
-    context 'Ruby <= 3.0', :ruby30 do
+    context 'Ruby <= 3.0', :ruby30, unsupported_on: :prism do
       it 'does not register an offense when all hash key and hash values are the same' do
+        expect_no_offenses(<<~RUBY)
+          {foo: foo, bar: bar}
+        RUBY
+      end
+    end
+  end
+
+  context 'configured to disallow mixing of implicit and explicit hash literal value' do
+    let(:cop_config) do
+      {
+        'EnforcedStyle' => 'ruby19',
+        'SupportedStyles' => %w[ruby19 hash_rockets],
+        'EnforcedShorthandSyntax' => 'either_consistent'
+      }
+    end
+
+    context 'Ruby >= 3.1', :ruby31 do
+      it 'does not register an offense when all hash values are omitted' do
+        expect_no_offenses(<<~RUBY)
+          {foo:, bar:}
+        RUBY
+      end
+
+      it 'registers an offense when some hash values are omitted but they can all be omitted' do
+        expect_offense(<<~RUBY)
+          {foo:, bar: bar}
+                      ^^^ Do not mix explicit and implicit hash values. Omit the hash value.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          {foo:, bar:}
+        RUBY
+      end
+
+      it 'registers an offense when some hash values are omitted but they cannot all be omitted' do
+        expect_offense(<<~RUBY)
+          {foo:, bar: baz}
+           ^^^ Do not mix explicit and implicit hash values. Include the hash value.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          {foo: foo, bar: baz}
+        RUBY
+      end
+
+      it 'does not register an offense when all hash values are present, but no values can be omitted' do
+        expect_no_offenses(<<~RUBY)
+          {foo: bar, bar: foo}
+        RUBY
+      end
+
+      it 'does not register an offense when all hash values are present, but only some values can be omitted' do
+        expect_no_offenses(<<~RUBY)
+          {foo: baz, bar: bar}
+        RUBY
+      end
+
+      it 'does not register an offense when all hash values are present, but can all be omitted' do
+        expect_no_offenses(<<~RUBY)
+          {foo: foo, bar: bar}
+        RUBY
+      end
+    end
+
+    context 'Ruby <= 3.0', :ruby30, unsupported_on: :prism do
+      it 'does not register an offense when hash key and hash value are the same' do
         expect_no_offenses(<<~RUBY)
           {foo: foo, bar: bar}
         RUBY

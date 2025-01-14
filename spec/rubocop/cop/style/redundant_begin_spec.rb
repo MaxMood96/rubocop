@@ -344,7 +344,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantBegin, :config do
     RUBY
   end
 
-  context '< Ruby 2.5', :ruby24 do
+  context '< Ruby 2.5', :ruby24, unsupported_on: :prism do
     it 'accepts a do-end block with a begin-end' do
       expect_no_offenses(<<~RUBY)
         do_something do
@@ -579,7 +579,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantBegin, :config do
         end
       RUBY
 
-      expect_correction("def foo = \n  bar\n\n")
+      expect_correction("def foo =  bar\n\n")
     end
 
     it 'accepts when `begin` block has multiple statements' do
@@ -594,6 +594,16 @@ RSpec.describe RuboCop::Cop::Style::RedundantBegin, :config do
     it 'accepts when `begin` block has no statements' do
       expect_no_offenses(<<~RUBY)
         def foo = begin
+        end
+      RUBY
+    end
+
+    it 'accepts when `begin` block includes `rescue` clause' do
+      expect_no_offenses(<<~RUBY)
+        def func = begin
+          foo
+        rescue
+          bar
         end
       RUBY
     end

@@ -75,7 +75,7 @@ module RuboCop
         def right_hand_side(send_node)
           dot = send_node.loc.dot
           selector = send_node.loc.selector
-          if send_node.dot? && selector && same_line?(dot, selector)
+          if (send_node.dot? || send_node.safe_navigation?) && selector && same_line?(dot, selector)
             dot.join(selector)
           elsif selector
             selector
@@ -179,10 +179,10 @@ module RuboCop
         # a.b
         #  .c
         def semantic_alignment_base(node, rhs)
-          return unless rhs.source.start_with?('.')
+          return unless rhs.source.start_with?('.', '&.')
 
           node = semantic_alignment_node(node)
-          return unless node&.loc&.selector
+          return unless node&.loc&.selector && node.loc.dot
 
           node.loc.dot.join(node.loc.selector)
         end
@@ -204,6 +204,10 @@ module RuboCop
           dot_right_above = get_dot_right_above(node)
           return dot_right_above if dot_right_above
 
+          if (multiline_block_chain_node = find_multiline_block_chain_node(node))
+            return multiline_block_chain_node
+          end
+
           node = first_call_has_a_dot(node)
           return if node.loc.dot.line != node.first_line
 
@@ -216,6 +220,17 @@ module RuboCop
             next unless dot
 
             dot.line == node.loc.dot.line - 1 && dot.column == node.loc.dot.column
+          end
+        end
+
+        def find_multiline_block_chain_node(node)
+          return unless (block_node = node.each_descendant(:block, :numblock).first)
+          return unless block_node.multiline? && block_node.parent.call_type?
+
+          if node.receiver.call_type?
+            node.receiver
+          else
+            block_node.parent
           end
         end
 

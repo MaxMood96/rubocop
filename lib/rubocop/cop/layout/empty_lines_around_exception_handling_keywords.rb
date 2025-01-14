@@ -6,7 +6,7 @@ module RuboCop
       # Checks if empty lines exist around the bodies of `begin`
       # sections. This cop doesn't check empty lines at `begin` body
       # beginning/end and around method definition body.
-      # `Style/EmptyLinesAroundBeginBody` or `Style/EmptyLinesAroundMethodBody`
+      # `Layout/EmptyLinesAroundBeginBody` or `Layout/EmptyLinesAroundMethodBody`
       # can be used for this purpose.
       #
       # @example
@@ -68,10 +68,11 @@ module RuboCop
           check_body(node.body, node.loc.line)
         end
         alias on_defs on_def
+        alias on_block on_def
+        alias on_numblock on_def
 
         def on_kwbegin(node)
-          body, = *node
-          check_body(body, node.loc.line)
+          check_body(node.children.first, node.loc.line)
         end
 
         private
@@ -81,7 +82,7 @@ module RuboCop
 
           locations.each do |loc|
             line = loc.line
-            next if line == line_of_def_or_kwbegin || last_rescue_and_end_on_same_line(body)
+            next if line == line_of_def_or_kwbegin || last_body_and_end_on_same_line?(body)
 
             keyword = loc.source
             # below the keyword
@@ -91,8 +92,13 @@ module RuboCop
           end
         end
 
-        def last_rescue_and_end_on_same_line(body)
-          body.rescue_type? && body.resbody_branches.last.loc.line == body.parent.loc.end.line
+        def last_body_and_end_on_same_line?(body)
+          end_keyword_line = body.parent.loc.end.line
+          return body.loc.last_line == end_keyword_line unless body.rescue_type?
+
+          last_body_line = body.else? ? body.loc.else.line : body.resbody_branches.last.loc.line
+
+          last_body_line == end_keyword_line
         end
 
         def message(location, keyword)
@@ -121,10 +127,10 @@ module RuboCop
         end
 
         def keyword_locations_in_ensure(node)
-          ensure_body, = *node
+          rescue_body_without_ensure = node.children.first
           [
             node.loc.keyword,
-            *keyword_locations(ensure_body)
+            *keyword_locations(rescue_body_without_ensure)
           ]
         end
       end

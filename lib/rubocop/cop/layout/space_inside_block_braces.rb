@@ -82,6 +82,10 @@ module RuboCop
         include RangeHelp
         extend AutoCorrector
 
+        def self.autocorrect_incompatible_with
+          [Style::BlockDelimiters]
+        end
+
         def on_block(node)
           return if node.keywords?
 
@@ -146,7 +150,7 @@ module RuboCop
           if single_line && /\S$/.match?(inner)
             no_space(right_brace.begin_pos, right_brace.end_pos, 'Space missing inside }.')
           else
-            column = node.loc.expression.column
+            column = node.source_range.column
             return if multiline_block?(left_brace, right_brace) &&
                       aligned_braces?(inner, right_brace, column)
 
@@ -236,6 +240,8 @@ module RuboCop
         end
 
         def offense(begin_pos, end_pos, msg, style_param = 'EnforcedStyle')
+          return if begin_pos > end_pos
+
           range = range_between(begin_pos, end_pos)
           add_offense(range, message: msg) do |corrector|
             case range.source

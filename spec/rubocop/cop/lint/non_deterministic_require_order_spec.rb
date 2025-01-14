@@ -114,7 +114,7 @@ RSpec.describe RuboCop::Cop::Lint::NonDeterministicRequireOrder, :config do
       end
     end
 
-    context 'when Ruby 2.7 or lower', :ruby27 do
+    context 'when Ruby 2.7 or lower', :ruby27, unsupported_on: :prism do
       context 'with unsorted index' do
         it 'registers an offense and autocorrects to add .sort when the block has `require`' do
           expect_offense(<<~RUBY)
@@ -185,7 +185,7 @@ RSpec.describe RuboCop::Cop::Lint::NonDeterministicRequireOrder, :config do
         end
 
         context 'with require block passed as parameter' do
-          it 'registers an offense an autocorrects to add sort' do
+          it 'registers an offense and autocorrects to add sort' do
             expect_offense(<<~RUBY)
               Dir["./lib/**/*.rb"].each(&method(:require))
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Sort files before requiring them.
@@ -198,7 +198,7 @@ RSpec.describe RuboCop::Cop::Lint::NonDeterministicRequireOrder, :config do
         end
 
         context 'with require_relative block passed as parameter' do
-          it 'registers an offense an autocorrects to add sort' do
+          it 'registers an offense and autocorrects to add sort' do
             expect_offense(<<~RUBY)
               Dir["./lib/**/*.rb"].each(&method(:require_relative))
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Sort files before requiring them.
@@ -245,7 +245,7 @@ RSpec.describe RuboCop::Cop::Lint::NonDeterministicRequireOrder, :config do
         end
 
         context 'with require block passed as parameter' do
-          it 'registers an offense an autocorrects to add sort' do
+          it 'registers an offense and autocorrects to add sort' do
             expect_offense(<<~RUBY)
               Dir.glob(Rails.root.join('test', '*.rb')).each(&method(:require))
               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Sort files before requiring them.

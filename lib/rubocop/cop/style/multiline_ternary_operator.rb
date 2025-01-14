@@ -39,7 +39,7 @@ module RuboCop
 
         MSG_IF = 'Avoid multi-line ternary operators, use `if` or `unless` instead.'
         MSG_SINGLE_LINE = 'Avoid multi-line ternary operators, use single-line instead.'
-        SINGLE_LINE_TYPES = %i[return break next send].freeze
+        SINGLE_LINE_TYPES = %i[return break next send csend].freeze
 
         def on_if(node)
           return unless offense?(node)
@@ -47,19 +47,21 @@ module RuboCop
           message = enforce_single_line_ternary_operator?(node) ? MSG_SINGLE_LINE : MSG_IF
 
           add_offense(node, message: message) do |corrector|
+            next if part_of_ignored_node?(node)
+
             autocorrect(corrector, node)
+
+            ignore_node(node)
           end
         end
 
         private
 
         def offense?(node)
-          node.ternary? && node.multiline?
+          node.ternary? && node.multiline? && node.source != replacement(node)
         end
 
         def autocorrect(corrector, node)
-          return unless offense?(node)
-
           corrector.replace(node, replacement(node))
           return unless (parent = node.parent)
           return unless (comments_in_condition = comments_in_condition(node))
@@ -83,7 +85,7 @@ module RuboCop
 
         def comments_in_condition(node)
           comments_in_range(node).map do |comment|
-            "#{comment.loc.expression.source}\n"
+            "#{comment.source}\n"
           end.join
         end
 

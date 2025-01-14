@@ -17,16 +17,12 @@ module RuboCop
       #     end
       #   end
       #
-      # @example
-      #
       #   # good
       #
       #   def foo
       #     bar = -> { puts 'hello' }
       #     bar.call
       #   end
-      #
-      # @example
       #
       #   # good
       #
@@ -46,8 +42,6 @@ module RuboCop
       #       end
       #     end
       #   end
-      #
-      # @example
       #
       #   # good
       #
@@ -101,8 +95,8 @@ module RuboCop
         MSG = 'Method definitions must not be nested. Use `lambda` instead.'
 
         def on_def(node)
-          subject, = *node
-          return if node.defs_type? && subject.lvar_type?
+          subject, = *node # rubocop:disable InternalAffairs/NodeDestructuring
+          return if node.defs_type? && allowed_subject_type?(subject)
 
           def_ancestor = node.each_ancestor(:def, :defs).first
           return unless def_ancestor
@@ -123,6 +117,10 @@ module RuboCop
             child.class_constructor? || allowed_method_name?(child)
         end
 
+        def allowed_subject_type?(subject)
+          subject.variable? || subject.const_type? || subject.call_type?
+        end
+
         def allowed_method_name?(node)
           name = node.method_name
 
@@ -131,12 +129,12 @@ module RuboCop
 
         # @!method eval_call?(node)
         def_node_matcher :eval_call?, <<~PATTERN
-          (block (send _ {:instance_eval :class_eval :module_eval} ...) ...)
+          ({block numblock} (send _ {:instance_eval :class_eval :module_eval} ...) ...)
         PATTERN
 
         # @!method exec_call?(node)
         def_node_matcher :exec_call?, <<~PATTERN
-          (block (send _ {:instance_exec :class_exec :module_exec} ...) ...)
+          ({block numblock} (send _ {:instance_exec :class_exec :module_exec} ...) ...)
         PATTERN
       end
     end

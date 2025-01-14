@@ -16,6 +16,9 @@ module RuboCop
       # The exploded style has an `AllowedCompactTypes` configuration
       # option that takes an Array of exception name Strings.
       #
+      # @safety
+      #   This cop is unsafe because `raise Foo` calls `Foo.exception`, not `Foo.new`.
+      #
       # @example EnforcedStyle: exploded (default)
       #   # bad
       #   raise StandardError.new('message')
@@ -47,6 +50,9 @@ module RuboCop
 
         EXPLODED_MSG = 'Provide an exception class and message as arguments to `%<method>s`.'
         COMPACT_MSG = 'Provide an exception object as an argument to `%<method>s`.'
+        ACCEPTABLE_ARG_TYPES = %i[
+          hash forwarded_restarg splat forwarded_restarg forwarded_args
+        ].freeze
 
         RESTRICT_ON_SEND = %i[raise fail].freeze
 
@@ -77,7 +83,7 @@ module RuboCop
 
         def correction_exploded_to_compact(node)
           exception_node, *message_nodes = *node.arguments
-          return node.source if message_nodes.size > 1
+          return if message_nodes.size > 1
 
           argument = message_nodes.first.source
           exception_class = exception_node.receiver&.source || exception_node.source
@@ -135,9 +141,8 @@ module RuboCop
 
           arg = args.first
 
-          # Allow code like `raise Ex.new(kw: arg)`.
-          # Allow code like `raise Ex.new(*args)`.
-          arg.hash_type? || arg.splat_type?
+          # Allow nodes that may forward more than one argument
+          ACCEPTABLE_ARG_TYPES.include?(arg.type)
         end
 
         def allowed_non_exploded_type?(arg)
@@ -147,7 +152,7 @@ module RuboCop
         end
 
         def requires_parens?(parent)
-          parent.and_type? || parent.or_type? || (parent.if_type? && parent.ternary?)
+          parent.operator_keyword? || (parent.if_type? && parent.ternary?)
         end
       end
     end

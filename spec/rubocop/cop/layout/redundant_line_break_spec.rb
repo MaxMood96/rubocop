@@ -28,6 +28,32 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
           ^^^^^^^^^^^^^^^^^^^^^^^^ Redundant line break detected.
            .join + []
         RUBY
+
+        expect_correction(<<~RUBY)
+          e.select { |i| i.cond? }.join
+          a = e.select { |i| i.cond? }.join
+          e.select { |i| i.cond? }.join + []
+        RUBY
+      end
+
+      it 'reports an offense for a safe navigation method call chained onto a single line block' do
+        expect_offense(<<~RUBY)
+          e&.select { |i| i.cond? }
+          ^^^^^^^^^^^^^^^^^^^^^^^^^ Redundant line break detected.
+            &.join
+          a = e&.select { |i| i.cond? }
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Redundant line break detected.
+            &.join
+          e&.select { |i| i.cond? }
+          ^^^^^^^^^^^^^^^^^^^^^^^^^ Redundant line break detected.
+            &.join + []
+        RUBY
+
+        expect_correction(<<~RUBY)
+          e&.select { |i| i.cond? }&.join
+          a = e&.select { |i| i.cond? }&.join
+          e&.select { |i| i.cond? }&.join + []
+        RUBY
       end
     end
 
@@ -100,6 +126,14 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
         RUBY
       end
 
+      it 'accepts a modified singleton method definition' do
+        expect_no_offenses(<<~RUBY)
+          x def self.y
+              z
+            end
+        RUBY
+      end
+
       it 'accepts a method call on a single line' do
         expect_no_offenses(<<~RUBY)
           my_method(1, 2, "x")
@@ -115,6 +149,64 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
 
         expect_correction(<<~RUBY)
           my_method(1) [:a]
+        RUBY
+      end
+
+      it 'does not register an offense for index access call chained on multiple lines with backslash' do
+        expect_no_offenses(<<~RUBY)
+          hash[:foo] \\
+            [:bar]
+        RUBY
+      end
+
+      it 'registers an offense for index access call chained on multiline hash literal' do
+        expect_offense(<<~RUBY)
+          {
+          ^ Redundant line break detected.
+            key: value
+          }[key]
+        RUBY
+
+        expect_correction(<<~RUBY)
+          { key: value }[key]
+        RUBY
+      end
+
+      it 'registers an offense when using `&&` before a backslash newline' do
+        expect_offense(<<~RUBY)
+          foo && \\
+          ^^^^^^^^ Redundant line break detected.
+            bar
+        RUBY
+
+        expect_correction(<<~RUBY)
+          foo && bar
+        RUBY
+      end
+
+      it 'does not register an offense when using `&&` after a backslash newline' do
+        expect_no_offenses(<<~RUBY)
+          foo \\
+            && bar
+        RUBY
+      end
+
+      it 'registers an offense when using `||` before a backslash newline' do
+        expect_offense(<<~RUBY)
+          foo || \\
+          ^^^^^^^^ Redundant line break detected.
+            bar
+        RUBY
+
+        expect_correction(<<~RUBY)
+          foo || bar
+        RUBY
+      end
+
+      it 'does not register an offense when using `||` after a backslash newline' do
+        expect_no_offenses(<<~RUBY)
+          foo \\
+            || bar
         RUBY
       end
 
@@ -303,7 +395,7 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
           RUBY
         end
 
-        it 'registers an offense and corrects with a arguments on multiple lines' do
+        it 'registers an offense and corrects with arguments on multiple lines' do
           expect_offense(<<~RUBY)
             foo(x,
             ^^^^^^ Redundant line break detected.
@@ -341,6 +433,24 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
               .baz
           RUBY
         end
+
+        it 'does not register an offense with a line broken string argument' do
+          expect_no_offenses(<<~RUBY)
+            foo('
+              xyz
+            ')
+              .bar
+              .baz
+          RUBY
+        end
+
+        it 'does not register an offense when the `%` form string `"%\n\n"` at the end of file' do
+          expect_no_offenses("%\n\n")
+        end
+
+        it 'does not register an offense when assigning the `%` form string `"%\n\n"` to a variable at the end of file' do
+          expect_no_offenses("x = %\n\n")
+        end
       end
     end
 
@@ -353,6 +463,13 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
           my_method(111111 +
                     222222 +
                     333333)
+        RUBY
+      end
+
+      it 'accepts a quoted symbol with a single newline' do
+        expect_no_offenses(<<~RUBY)
+          foo(:"
+          ")
         RUBY
       end
 

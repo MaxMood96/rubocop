@@ -8,8 +8,8 @@ module RuboCop
       # These can be replaced by their respective predicate methods.
       # This cop can also be configured to do the reverse.
       #
-      # This cop can be customized allowed methods with `AllowedMethods`.
-      # By default, there are no methods to allowed.
+      # This cop's allowed methods can be customized with `AllowedMethods`.
+      # By default, there are no allowed methods.
       #
       # This cop disregards `#nonzero?` as its value is truthy or falsey,
       # but not `true` and `false`, and thus not always interchangeable with
@@ -118,12 +118,14 @@ module RuboCop
 
           return unless numeric && operator && replacement_supported?(operator)
 
-          [numeric, replacement(numeric, operator)]
+          [numeric, replacement(node, numeric, operator)]
         end
 
-        def replacement(numeric, operation)
+        def replacement(node, numeric, operation)
           if style == :predicate
             [parenthesized_source(numeric), REPLACEMENTS.invert[operation.to_s]].join('.')
+          elsif negated?(node)
+            "(#{numeric.source} #{REPLACEMENTS[operation.to_s]} 0)"
           else
             [numeric.source, REPLACEMENTS[operation.to_s], 0].join(' ')
           end
@@ -155,6 +157,12 @@ module RuboCop
 
             [numeric, comparison]
           end
+        end
+
+        def negated?(node)
+          return false unless (parent = node.parent)
+
+          parent.send_type? && parent.method?(:!)
         end
 
         # @!method predicate(node)

@@ -27,6 +27,8 @@ module RuboCop
         PATTERN
 
         def on_new_investigation
+          return if processed_source.blank?
+
           assertions_using_described_class_msg.each { |node| add_offense(node) }
         end
 
@@ -40,11 +42,6 @@ module RuboCop
           described_class_msg(processed_source.ast).reject do |node|
             node.ancestors.any? { |ancestor| rspec_expectation_on_msg?(ancestor) }
           end
-        end
-
-        # Only process spec files
-        def relevant_file?(file)
-          file.end_with?('_spec.rb')
         end
       end
     end

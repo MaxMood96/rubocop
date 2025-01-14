@@ -41,7 +41,6 @@ module RuboCop
       #     f != 1
       #   end
       class InverseMethods < Base
-        include IgnoredNode
         include RangeHelp
         extend AutoCorrector
 
@@ -60,25 +59,25 @@ module RuboCop
         # @!method inverse_candidate?(node)
         def_node_matcher :inverse_candidate?, <<~PATTERN
           {
-            (send $(send $(...) $_ $...) :!)
-            (send ({block numblock} $(send $(...) $_) $...) :!)
-            (send (begin $(send $(...) $_ $...)) :!)
+            (send $(call $(...) $_ $...) :!)
+            (send ({block numblock} $(call $(...) $_) $...) :!)
+            (send (begin $(call $(...) $_ $...)) :!)
           }
         PATTERN
 
         # @!method inverse_block?(node)
         def_node_matcher :inverse_block?, <<~PATTERN
-          ({block numblock} $(send (...) $_) ... { $(send ... :!)
+          ({block numblock} $(call (...) $_) ... { $(call ... :!)
                                                    $(send (...) {:!= :!~} ...)
-                                                   (begin ... $(send ... :!))
+                                                   (begin ... $(call ... :!))
                                                    (begin ... $(send (...) {:!= :!~} ...))
                                                  })
         PATTERN
 
         def on_send(node)
-          inverse_candidate?(node) do |_method_call, lhs, method, rhs|
+          inverse_candidate?(node) do |method_call, lhs, method, rhs|
             return unless inverse_methods.key?(method)
-            return if negated?(node)
+            return if negated?(node) || relational_comparison_with_safe_navigation?(method_call)
             return if part_of_ignored_node?(node)
             return if possible_class_hierarchy_check?(lhs, rhs, method)
 
@@ -87,6 +86,7 @@ module RuboCop
             end
           end
         end
+        alias on_csend on_send
 
         def on_block(node)
           inverse_block?(node) do |_method_call, method, block|
@@ -154,16 +154,16 @@ module RuboCop
           node.parent.respond_to?(:method?) && node.parent.method?(:!)
         end
 
+        def relational_comparison_with_safe_navigation?(node)
+          node.csend_type? && CLASS_COMPARISON_METHODS.include?(node.method_name)
+        end
+
         def not_to_receiver(node, method_call)
-          Parser::Source::Range.new(node.loc.expression.source_buffer,
-                                    node.loc.selector.begin_pos,
-                                    method_call.loc.expression.begin_pos)
+          node.loc.selector.begin.join(method_call.source_range.begin)
         end
 
         def end_parentheses(node, method_call)
-          Parser::Source::Range.new(node.loc.expression.source_buffer,
-                                    method_call.loc.expression.end_pos,
-                                    node.loc.expression.end_pos)
+          method_call.source_range.end.join(node.source_range.end)
         end
 
         # When comparing classes, `!(Integer < Numeric)` is not the same as

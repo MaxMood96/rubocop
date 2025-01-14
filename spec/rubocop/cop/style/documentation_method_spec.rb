@@ -92,6 +92,14 @@ RSpec.describe RuboCop::Cop::Style::DocumentationMethod, :config do
           expect_no_offenses('private def method; end')
         end
 
+        it 'does not register an offense with inline `private_class_method`' do
+          expect_no_offenses(<<~RUBY)
+            private_class_method def self.foo
+              puts 'bar'
+            end
+          RUBY
+        end
+
         context 'when required for non-public methods' do
           let(:require_for_non_public_methods) { true }
 
@@ -128,6 +136,15 @@ RSpec.describe RuboCop::Cop::Style::DocumentationMethod, :config do
             expect_offense(<<~RUBY)
               private def method; end
                       ^^^^^^^^^^^^^^^ Missing method documentation comment.
+            RUBY
+          end
+
+          it 'registers an offense with inline `private_class_method`' do
+            expect_offense(<<~RUBY)
+              private_class_method def self.foo
+                                   ^^^^^^^^^^^^ Missing method documentation comment.
+                puts 'bar'
+              end
             RUBY
           end
         end
@@ -370,7 +387,7 @@ RSpec.describe RuboCop::Cop::Style::DocumentationMethod, :config do
       context 'with documentation comment' do
         context 'when method is public' do
           it 'does not register an offense' do
-            expect_no_offenses(<<-RUBY)
+            expect_no_offenses(<<~RUBY)
               class Foo
                 # Documentation
                 def bar
@@ -974,6 +991,19 @@ RSpec.describe RuboCop::Cop::Style::DocumentationMethod, :config do
               RUBY
             end
           end
+        end
+      end
+
+      describe 'when AllowedMethods is configured' do
+        before { config['Style/DocumentationMethod'] = { 'AllowedMethods' => ['method_missing'] } }
+
+        it 'ignores the methods in the config' do
+          expect_no_offenses(<<~RUBY)
+            class Foo
+              def method_missing(name, *args)
+              end
+            end
+          RUBY
         end
       end
     end

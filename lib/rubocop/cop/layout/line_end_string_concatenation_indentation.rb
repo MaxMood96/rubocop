@@ -84,6 +84,8 @@ module RuboCop
           return unless strings_concatenated_with_backslash?(node)
 
           children = node.children
+          return if children.empty?
+
           if style == :aligned && !always_indented?(node)
             check_aligned(children, 1)
           else
@@ -125,7 +127,7 @@ module RuboCop
 
         def base_column(child)
           grandparent = child.parent.parent
-          if grandparent&.type == :pair
+          if grandparent&.pair_type?
             grandparent.loc.column
           else
             child.source_range.source_line =~ /\S/

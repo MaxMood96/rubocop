@@ -105,7 +105,7 @@ module RuboCop
 
         # Value object to extract source ranges for the different parts of a magic comment
         class CommentRange
-          extend Forwardable
+          extend SimpleForwardable
 
           DIRECTIVE_REGEXP = Regexp.union(MagicComment::KEYWORDS.map do |_, v|
             Regexp.new(v, Regexp::IGNORECASE)

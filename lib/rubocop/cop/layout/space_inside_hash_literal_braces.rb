@@ -12,9 +12,11 @@ module RuboCop
       #
       #   # bad
       #   h = {a: 1, b: 2}
+      #   foo = {{ a: 1 } => { b: { c: 2 }}}
       #
       #   # good
       #   h = { a: 1, b: 2 }
+      #   foo = { { a: 1 } => { b: { c: 2 } } }
       #
       # @example EnforcedStyle: no_space
       #   # The `no_space` style enforces that hash literals have
@@ -22,9 +24,11 @@ module RuboCop
       #
       #   # bad
       #   h = { a: 1, b: 2 }
+      #   foo = {{ a: 1 } => { b: { c: 2 }}}
       #
       #   # good
       #   h = {a: 1, b: 2}
+      #   foo = {{a: 1} => {b: {c: 2}}}
       #
       # @example EnforcedStyle: compact
       #   # The `compact` style normally requires a space inside
@@ -116,7 +120,7 @@ module RuboCop
 
         def incorrect_style_detected(token1, token2,
                                      expect_space, is_empty_braces)
-          brace = (token1.text == '{' ? token1 : token2).pos
+          brace = (token1.left_brace? ? token1 : token2).pos
           range = expect_space ? brace : space_range(brace)
           detected_style = expect_space ? 'no_space' : 'space'
 

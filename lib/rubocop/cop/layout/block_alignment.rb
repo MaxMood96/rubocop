@@ -16,7 +16,7 @@ module RuboCop
       # start of the line where the expression started.
       #
       # `either` (which is the default) : the `end` is allowed to be in either
-      # location. The autofixer will default to `start_of_line`.
+      # location. The autocorrect will default to `start_of_line`.
       #
       # @example EnforcedStyleAlignWith: either (default)
       #   # bad
@@ -92,16 +92,6 @@ module RuboCop
 
         private
 
-        def start_for_block_node(block_node)
-          # Which node should we align the 'end' with?
-          result = block_end_align_target(block_node)
-
-          # In offense message, we want to show the assignment LHS rather than
-          # the entire assignment
-          result, = *result while result.op_asgn_type? || result.masgn_type?
-          result
-        end
-
         def block_end_align_target(node)
           lineage = [node, *node.ancestors]
 
@@ -137,7 +127,6 @@ module RuboCop
                              start_loc,
                              end_loc,
                              do_source_line_column)
-
           error_source_line_column = if style == :start_of_block
                                        do_source_line_column
                                      else
@@ -153,7 +142,11 @@ module RuboCop
         end
 
         def autocorrect(corrector, node)
-          ancestor_node = start_for_block_node(node)
+          ancestor_node = if style == :start_of_block
+                            start_for_block_node(node)
+                          else
+                            start_for_line_node(node)
+                          end
           start_col = compute_start_col(ancestor_node, node)
           loc_end = node.loc.end
           delta = start_col - loc_end.column
@@ -173,6 +166,30 @@ module RuboCop
             prefer: format_source_line_column(error_source_line_column),
             alt_prefer: alt_start_msg(start_loc, do_source_line_column)
           )
+        end
+
+        def start_for_block_node(block_node)
+          # Which node should we align the 'end' with?
+          start_node = block_end_align_target(block_node)
+
+          find_lhs_node(start_node)
+        end
+
+        def start_for_line_node(block_node)
+          start_node = start_for_block_node(block_node)
+
+          start_node = start_node.each_ancestor.to_a.reverse.find do |node|
+            same_line?(start_node, node)
+          end || start_node
+
+          find_lhs_node(start_node)
+        end
+
+        # In offense message, we want to show the assignment LHS rather than
+        # the entire assignment.
+        def find_lhs_node(node)
+          node = node.lhs while node.op_asgn_type? || node.masgn_type?
+          node
         end
 
         def compute_do_source_line_column(node, end_loc)

@@ -12,6 +12,17 @@ RSpec.describe RuboCop::Cop::Lint::RedundantWithIndex, :config do
     RUBY
   end
 
+  it 'registers an offense for `ary&.each_with_index { |v| v }` and corrects to `ary&.each`' do
+    expect_offense(<<~RUBY)
+      ary&.each_with_index { |v| v }
+           ^^^^^^^^^^^^^^^ Use `each` instead of `each_with_index`.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      ary&.each { |v| v }
+    RUBY
+  end
+
   it 'registers an offense when using `ary.each.with_index { |v| v }` and corrects to `ary.each`' do
     expect_offense(<<~RUBY)
       ary.each.with_index { |v| v }
@@ -64,6 +75,17 @@ RSpec.describe RuboCop::Cop::Lint::RedundantWithIndex, :config do
       RUBY
     end
 
+    it 'registers an offense for `ary&.each_with_index { _1 }` and corrects to `ary&.each`' do
+      expect_offense(<<~RUBY)
+        ary&.each_with_index { _1 }
+             ^^^^^^^^^^^^^^^ Use `each` instead of `each_with_index`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        ary&.each { _1 }
+      RUBY
+    end
+
     it 'registers an offense when using `ary.each.with_index { _1 }` and corrects to `ary.each`' do
       expect_offense(<<~RUBY)
         ary.each.with_index { _1 }
@@ -77,6 +99,18 @@ RSpec.describe RuboCop::Cop::Lint::RedundantWithIndex, :config do
 
     it 'accepts an index is used as a numblock argument' do
       expect_no_offenses('ary.each_with_index { _1; _2 }')
+    end
+
+    it 'accepts with_index with receiver and a block' do
+      expect_no_offenses('ary.with_index { |v| v }')
+    end
+
+    it 'accepts with_index without receiver with a block' do
+      expect_no_offenses('with_index { |v| v }')
+    end
+
+    it 'accepts with_index without receiver with a numblock' do
+      expect_no_offenses('with_index { _1 }')
     end
   end
 end

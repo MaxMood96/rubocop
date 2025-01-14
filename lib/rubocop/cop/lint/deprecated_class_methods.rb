@@ -38,7 +38,7 @@ module RuboCop
           attr clone dup exists? freeze gethostbyaddr gethostbyname iterator?
         ].freeze
 
-        PREFERRED_METHDOS = {
+        PREFERRED_METHODS = {
           clone: 'to_h',
           dup: 'to_h',
           exists?: 'exist?',
@@ -52,7 +52,7 @@ module RuboCop
         # @!method deprecated_class_method?(node)
         def_node_matcher :deprecated_class_method?, <<~PATTERN
           {
-            (send (const {cbase nil?} {:ENV}) {:clone :dup :freeze})
+            (send (const {cbase nil?} :ENV) {:clone :dup :freeze})
             (send (const {cbase nil?} {:File :Dir}) :exists? _)
             (send (const {cbase nil?} :Socket) {:gethostbyaddr :gethostbyname} ...)
             (send nil? :attr _ boolean)
@@ -82,7 +82,7 @@ module RuboCop
 
         def offense_range(node)
           if socket_const?(node.receiver) || dir_env_file_const?(node.receiver)
-            node.loc.expression.begin.join(node.loc.selector.end)
+            node.source_range.begin.join(node.loc.selector.end)
           elsif node.method?(:attr)
             node
           else
@@ -97,11 +97,11 @@ module RuboCop
 
             "#{preferred_attr_method} #{node.first_argument.source}"
           elsif dir_env_file_const?(node.receiver)
-            prefer = PREFERRED_METHDOS[node.method_name]
+            prefer = PREFERRED_METHODS[node.method_name]
 
             prefer ? "#{node.receiver.source}.#{prefer}" : 'ENV'
           else
-            PREFERRED_METHDOS[node.method_name]
+            PREFERRED_METHODS[node.method_name]
           end
         end
 

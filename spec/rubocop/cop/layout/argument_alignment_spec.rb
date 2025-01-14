@@ -320,7 +320,7 @@ RSpec.describe RuboCop::Cop::Layout::ArgumentAlignment, :config do
       RUBY
     end
 
-    it 'registers an offense and correct multi-line parametersindented too far' do
+    it 'registers an offense and correct multi-line parameters indented too far' do
       expect_offense(<<~RUBY)
         create :transaction, :closed,
                  account:          account,
@@ -355,6 +355,26 @@ RSpec.describe RuboCop::Cop::Layout::ArgumentAlignment, :config do
                    order: "#{legacy_name.table_name}.published DESC"
 
         end
+      RUBY
+    end
+
+    it 'can handle a method call using square brackets' do
+      expect_offense(<<~RUBY)
+        callable[
+              foo,
+            bar,
+            ^^^ Align the arguments of a method call if they span more than one line.
+                   baz
+                   ^^^ Align the arguments of a method call if they span more than one line.
+        ]
+      RUBY
+
+      expect_correction(<<~RUBY)
+        callable[
+              foo,
+              bar,
+              baz
+        ]
       RUBY
     end
 
@@ -545,6 +565,27 @@ RSpec.describe RuboCop::Cop::Layout::ArgumentAlignment, :config do
           |   )
         RUBY
       end
+
+      it 'can handle a method call using square brackets' do
+        expect_offense(<<~RUBY)
+          callable[
+                foo,
+                ^^^ Use one level of indentation for arguments following the first line of a multi-line method call.
+              bar,
+              ^^^ Use one level of indentation for arguments following the first line of a multi-line method call.
+                     baz
+                     ^^^ Use one level of indentation for arguments following the first line of a multi-line method call.
+          ]
+        RUBY
+
+        expect_correction(<<~RUBY)
+          callable[
+            foo,
+            bar,
+            baz
+          ]
+        RUBY
+      end
     end
 
     context 'assigned methods' do
@@ -619,7 +660,7 @@ RSpec.describe RuboCop::Cop::Layout::ArgumentAlignment, :config do
       end
     end
 
-    it 'does not register an offense when using aligned braced hash as a argument' do
+    it 'does not register an offense when using aligned braced hash as an argument' do
       expect_no_offenses(<<~RUBY)
         do_something(
           {

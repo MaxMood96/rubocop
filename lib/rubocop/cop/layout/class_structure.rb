@@ -68,6 +68,13 @@ module RuboCop
       #        - extend
       # ----
       #
+      # @safety
+      #   Autocorrection is unsafe because class methods and module inclusion
+      #   can behave differently, based on which methods or constants have
+      #   already been defined.
+      #
+      #   Constants will only be moved when they are assigned with literals.
+      #
       # @example
       #   # bad
       #   # Expect extend be before constant
@@ -159,6 +166,7 @@ module RuboCop
             previous = index
           end
         end
+        alias on_sclass on_class
 
         private
 
@@ -285,10 +293,12 @@ module RuboCop
         end
 
         def end_position_for(node)
-          heredoc = find_heredoc(node)
-          return heredoc.location.heredoc_end.end_pos + 1 if heredoc
+          if node.casgn_type?
+            heredoc = find_heredoc(node)
+            return heredoc.location.heredoc_end.end_pos + 1 if heredoc
+          end
 
-          end_line = buffer.line_for_position(node.loc.expression.end_pos)
+          end_line = buffer.line_for_position(node.source_range.end_pos)
           buffer.line_range(end_line).end_pos
         end
 

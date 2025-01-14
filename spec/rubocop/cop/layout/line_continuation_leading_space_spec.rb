@@ -8,7 +8,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         'this text is too' \
         ' long'
-         ^ Move leading spaces to the end of previous line.
+         ^ Move leading spaces to the end of the previous line.
       RUBY
 
       expect_correction(<<~'RUBY')
@@ -21,7 +21,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         'this text is too' \
           ' long'
-           ^ Move leading spaces to the end of previous line.
+           ^ Move leading spaces to the end of the previous line.
       RUBY
 
       expect_correction(<<~'RUBY')
@@ -34,7 +34,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         'this text contains a lot of' \
         '               spaces'
-         ^^^^^^^^^^^^^^^ Move leading spaces to the end of previous line.
+         ^^^^^^^^^^^^^^^ Move leading spaces to the end of the previous line.
       RUBY
 
       expect_correction(<<~'RUBY')
@@ -47,9 +47,9 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         'this text is too' \
         ' long' \
-         ^ Move leading spaces to the end of previous line.
+         ^ Move leading spaces to the end of the previous line.
         '  long long'
-         ^^ Move leading spaces to the end of previous line.
+         ^^ Move leading spaces to the end of the previous line.
       RUBY
 
       expect_correction(<<~'RUBY')
@@ -64,7 +64,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
         something_unrelated_to_the_line_continuation_below
         'this text is too' \
         ' long'
-         ^ Move leading spaces to the end of previous line.
+         ^ Move leading spaces to the end of the previous line.
       RUBY
 
       expect_correction(<<~'RUBY')
@@ -78,7 +78,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         long_method_name 'this text is too' \
           ' long' do
-           ^ Move leading spaces to the end of previous line.
+           ^ Move leading spaces to the end of the previous line.
         end
       RUBY
 
@@ -94,7 +94,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
         long_method_name(
           'this text is too' \
           ' long'
-           ^ Move leading spaces to the end of previous line.
+           ^ Move leading spaces to the end of the previous line.
         )
       RUBY
 
@@ -103,6 +103,36 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
           'this text is too ' \
           'long'
         )
+      RUBY
+    end
+
+    it 'registers no offense for multiline string with backslash' do
+      expect_no_offenses(<<~'RUBY')
+        '"this text is too" \
+        " long"'
+      RUBY
+    end
+
+    it 'registers no offense when multiline string ends with a line continuation' do
+      expect_no_offenses(<<~'RUBY')
+        "" "foo
+        bar\
+        "
+      RUBY
+    end
+
+    it 'registers an offense when multiline string ends on 1st line' do
+      expect_offense(<<~'RUBY')
+        "foo
+        bar" \
+        " baz"
+         ^ Move leading spaces to the end of the previous line.
+      RUBY
+
+      expect_correction(<<~'RUBY')
+        "foo
+        bar " \
+        "baz"
       RUBY
     end
 
@@ -123,7 +153,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
         expect_offense(<<~'RUBY')
           "foo #{bar}" \
           ' long'
-           ^ Move leading spaces to the end of previous line.
+           ^ Move leading spaces to the end of the previous line.
         RUBY
 
         expect_correction(<<~'RUBY')
@@ -136,7 +166,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
         expect_offense(<<~'RUBY')
           'this line is' \
           " #{foo}"
-           ^ Move leading spaces to the end of previous line.
+           ^ Move leading spaces to the end of the previous line.
         RUBY
 
         expect_correction(<<~'RUBY')
@@ -163,7 +193,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
         expect_offense(<<~'RUBY')
           "foo #{'bar' \
             ' baz'}"
-             ^ Move leading spaces to the end of previous line.
+             ^ Move leading spaces to the end of the previous line.
         RUBY
 
         expect_correction(<<~'RUBY')
@@ -180,7 +210,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
     it 'registers an offense when 1st line has one trailing space' do
       expect_offense(<<~'RUBY')
         'this text is too ' \
-                         ^ Move trailing spaces to the start of next line.
+                         ^ Move trailing spaces to the start of the next line.
         'long'
       RUBY
 
@@ -194,7 +224,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         'this text is too' \
           ' very ' \
-                ^ Move trailing spaces to the start of next line.
+                ^ Move trailing spaces to the start of the next line.
           'long'
       RUBY
 
@@ -208,7 +238,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
     it 'registers an offense when 1st line has multiple trailing spaces' do
       expect_offense(<<~'RUBY')
         'this text contains a lot of               ' \
-                                    ^^^^^^^^^^^^^^^ Move trailing spaces to the start of next line.
+                                    ^^^^^^^^^^^^^^^ Move trailing spaces to the start of the next line.
         'spaces'
       RUBY
 
@@ -221,9 +251,9 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
     it 'registers offenses when 1st and 2nd line has trailing spaces' do
       expect_offense(<<~'RUBY')
         'this text is too ' \
-                         ^ Move trailing spaces to the start of next line.
+                         ^ Move trailing spaces to the start of the next line.
         'long  ' \
-             ^^ Move trailing spaces to the start of next line.
+             ^^ Move trailing spaces to the start of the next line.
         'long long'
       RUBY
 
@@ -238,7 +268,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         something_unrelated_to_the_line_continuation_below
         'this text is too ' \
-                         ^ Move trailing spaces to the start of next line.
+                         ^ Move trailing spaces to the start of the next line.
         'long'
       RUBY
 
@@ -253,7 +283,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         long_method_name 'this text is too' \
           ' very ' \
-                ^ Move trailing spaces to the start of next line.
+                ^ Move trailing spaces to the start of the next line.
           'long' do
         end
       RUBY
@@ -270,7 +300,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       expect_offense(<<~'RUBY')
         long_method_name(
           'this text is too ' \
-                           ^ Move trailing spaces to the start of next line.
+                           ^ Move trailing spaces to the start of the next line.
           'long'
         )
       RUBY
@@ -280,6 +310,13 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
           'this text is too' \
           ' long'
         )
+      RUBY
+    end
+
+    it 'registers no offense for multiline string with backslash' do
+      expect_no_offenses(<<~'RUBY')
+        '"this text is too " \
+        "long"'
       RUBY
     end
 
@@ -299,7 +336,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       it 'registers offenses when 1st line has trailing spaces and 2nd line is interpolated' do
         expect_offense(<<~'RUBY')
           'foo ' \
-              ^ Move trailing spaces to the start of next line.
+              ^ Move trailing spaces to the start of the next line.
           "#{bar} long"
         RUBY
 
@@ -312,7 +349,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       it 'registers offenses when 1st line has leading spaces and 1st line is interpolated' do
         expect_offense(<<~'RUBY')
           "this #{foo} is " \
-                         ^ Move trailing spaces to the start of next line.
+                         ^ Move trailing spaces to the start of the next line.
           'long'
         RUBY
 
@@ -339,7 +376,7 @@ RSpec.describe RuboCop::Cop::Layout::LineContinuationLeadingSpace, :config do
       it 'registers an offense for incorrectly formatted multiline interpolated string' do
         expect_offense(<<~'RUBY')
           "foo #{'bar ' \
-                     ^ Move trailing spaces to the start of next line.
+                     ^ Move trailing spaces to the start of the next line.
             'baz'}"
         RUBY
 

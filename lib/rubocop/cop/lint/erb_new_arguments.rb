@@ -3,14 +3,13 @@
 module RuboCop
   module Cop
     module Lint
-      #
-      # This cop emulates the following Ruby warnings in Ruby 2.6.
+      # Emulates the following Ruby warnings in Ruby 2.6.
       #
       # [source,console]
       # ----
-      # % cat example.rb
+      # $ cat example.rb
       # ERB.new('hi', nil, '-', '@output_buffer')
-      # % ruby -rerb example.rb
+      # $ ruby -rerb example.rb
       # example.rb:1: warning: Passing safe_level with the 2nd argument of ERB.new is
       # deprecated. Do not use it, and specify other arguments as keyword arguments.
       # example.rb:1: warning: Passing trim_mode with the 3rd argument of ERB.new is
@@ -66,17 +65,15 @@ module RuboCop
 
         minimum_target_ruby_version 2.6
 
-        MESSAGES = [
-          'Passing safe_level with the 2nd argument of `ERB.new` is ' \
-          'deprecated. Do not use it, and specify other arguments as ' \
-          'keyword arguments.',
-          'Passing trim_mode with the 3rd argument of `ERB.new` is ' \
-          'deprecated. Use keyword argument like ' \
-          '`ERB.new(str, trim_mode: %<arg_value>s)` instead.',
-          'Passing eoutvar with the 4th argument of `ERB.new` is ' \
-          'deprecated. Use keyword argument like ' \
-          '`ERB.new(str, eoutvar: %<arg_value>s)` instead.'
-        ].freeze
+        MESSAGE_SAFE_LEVEL = 'Passing safe_level with the 2nd argument of `ERB.new` is ' \
+                             'deprecated. Do not use it, and specify other arguments as ' \
+                             'keyword arguments.'
+        MESSAGE_TRIM_MODE =  'Passing trim_mode with the 3rd argument of `ERB.new` is ' \
+                             'deprecated. Use keyword argument like ' \
+                             '`ERB.new(str, trim_mode: %<arg_value>s)` instead.'
+        MESSAGE_EOUTVAR =    'Passing eoutvar with the 4th argument of `ERB.new` is ' \
+                             'deprecated. Use keyword argument like ' \
+                             '`ERB.new(str, eoutvar: %<arg_value>s)` instead.'
 
         RESTRICT_ON_SEND = %i[new].freeze
 
@@ -93,10 +90,8 @@ module RuboCop
             arguments[1..3].each_with_index do |argument, i|
               next if !argument || argument.hash_type?
 
-              message = format(MESSAGES[i], arg_value: argument.source)
-
               add_offense(
-                argument.source_range, message: message
+                argument, message: message(i, argument.source)
               ) do |corrector|
                 autocorrect(corrector, node)
               end
@@ -106,8 +101,19 @@ module RuboCop
 
         private
 
+        def message(positional_argument_index, arg_value)
+          case positional_argument_index
+          when 0
+            MESSAGE_SAFE_LEVEL
+          when 1
+            format(MESSAGE_TRIM_MODE, arg_value: arg_value)
+          when 2
+            format(MESSAGE_EOUTVAR, arg_value: arg_value)
+          end
+        end
+
         def autocorrect(corrector, node)
-          str_arg = node.arguments[0].source
+          str_arg = node.first_argument.source
 
           kwargs = build_kwargs(node)
           overridden_kwargs = override_by_legacy_args(kwargs, node)
@@ -122,11 +128,11 @@ module RuboCop
         end
 
         def build_kwargs(node)
-          return [nil, nil] unless node.arguments.last.hash_type?
+          return [nil, nil] unless node.last_argument.hash_type?
 
           trim_mode_arg, eoutvar_arg = nil
 
-          node.arguments.last.pairs.each do |pair|
+          node.last_argument.pairs.each do |pair|
             case pair.key.source
             when 'trim_mode'
               trim_mode_arg = "trim_mode: #{pair.value.source}"

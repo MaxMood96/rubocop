@@ -6,80 +6,78 @@ module RuboCop
       # Checks for a line break before the first argument in a
       # multi-line method call.
       #
-      # @example AllowMultilineFinalElement: false (default)
+      # @example
       #
-      #     # bad
-      #     method(foo, bar,
-      #       baz)
+      #   # bad
+      #   method(foo, bar,
+      #     baz)
       #
-      #     # bad
-      #     method(foo, bar, {
-      #       baz: "a",
-      #       qux: "b",
-      #     })
-      #
-      #     # good
-      #     method(
-      #       foo, bar,
-      #       baz)
-      #
-      #     # good
-      #     method(
-      #       foo, bar, {
-      #       baz: "a",
-      #       qux: "b",
-      #     })
+      #   # good
+      #   method(
+      #     foo, bar,
+      #     baz)
       #
       #     # ignored
       #     method foo, bar,
       #       baz
+      #
+      # @example AllowMultilineFinalElement: false (default)
+      #
+      #   # bad
+      #   method(foo, bar, {
+      #     baz: "a",
+      #     qux: "b",
+      #   })
+      #
+      #   # good
+      #   method(
+      #     foo, bar, {
+      #     baz: "a",
+      #     qux: "b",
+      #   })
       #
       # @example AllowMultilineFinalElement: true
       #
-      #     # bad
-      #     method(foo, bar,
-      #       baz)
-      #
-      #     # bad
-      #     method(foo,
-      #       bar,
-      #       {
-      #         baz: "a",
-      #         qux: "b",
-      #       }
-      #     )
-      #
-      #     # good
-      #     method(foo, bar, {
+      #   # bad
+      #   method(foo,
+      #     bar,
+      #     {
       #       baz: "a",
       #       qux: "b",
-      #     })
+      #     }
+      #   )
       #
-      #     # good
-      #     method(
-      #       foo, bar,
-      #       baz)
+      #   # good
+      #   method(foo, bar, {
+      #     baz: "a",
+      #     qux: "b",
+      #   })
       #
-      #     # good
-      #     method(
-      #       foo,
-      #       bar,
-      #       {
-      #         baz: "a",
-      #         qux: "b",
-      #       }
-      #     )
+      #   # good
+      #   method(
+      #     foo,
+      #     bar,
+      #     {
+      #       baz: "a",
+      #       qux: "b",
+      #     }
+      #   )
       #
-      #     # ignored
-      #     method foo, bar,
-      #       baz
+      # @example AllowedMethods: ['some_method']
+      #
+      #   # good
+      #   some_method(foo, bar,
+      #     baz)
       class FirstMethodArgumentLineBreak < Base
         include FirstElementLineBreak
+        include AllowedMethods
         extend AutoCorrector
 
         MSG = 'Add a line break before the first argument of a multi-line method argument list.'
 
         def on_send(node)
+          return if allowed_method?(node.method_name)
+
           args = node.arguments.dup
 
           # If there is a trailing hash arg without explicit braces, like this:

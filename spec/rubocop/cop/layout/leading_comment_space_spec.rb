@@ -35,6 +35,15 @@ RSpec.describe RuboCop::Cop::Layout::LeadingCommentSpace, :config do
     RUBY
   end
 
+  it 'does not register an offense for a multiline shebang starting on the first line' do
+    expect_no_offenses(<<~RUBY)
+      #!/usr/bin/env nix-shell
+      #! nix-shell -i ruby --pure
+      #! nix-shell -p ruby gh git
+      test
+    RUBY
+  end
+
   it 'registers an offense and corrects #! after the first line' do
     expect_offense(<<~RUBY)
       test
@@ -45,6 +54,25 @@ RSpec.describe RuboCop::Cop::Layout::LeadingCommentSpace, :config do
     expect_correction(<<~RUBY)
       test
       # !/usr/bin/ruby
+    RUBY
+  end
+
+  it 'registers an offense and corrects for a multiline shebang starting after the first line' do
+    expect_offense(<<~RUBY)
+      test
+      #!/usr/bin/env nix-shell
+      ^^^^^^^^^^^^^^^^^^^^^^^^ Missing space after `#`.
+      #! nix-shell -i ruby --pure
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing space after `#`.
+      #! nix-shell -p ruby gh git
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Missing space after `#`.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      test
+      # !/usr/bin/env nix-shell
+      # ! nix-shell -i ruby --pure
+      # ! nix-shell -p ruby gh git
     RUBY
   end
 
@@ -143,6 +171,20 @@ RSpec.describe RuboCop::Cop::Layout::LeadingCommentSpace, :config do
       RUBY
     end
 
+    it 'registers an offense when using `#+` or `#-` as they are not RDoc comments' do
+      expect_offense(<<~RUBY)
+        #+
+        ^^ Missing space after `#`.
+        #-
+        ^^ Missing space after `#`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        # +
+        # -
+      RUBY
+    end
+
     it 'registers an offense when starting `:`' do
       expect_offense(<<~RUBY)
         #:nodoc:
@@ -204,6 +246,84 @@ RSpec.describe RuboCop::Cop::Layout::LeadingCommentSpace, :config do
             ruby '~> 2.7.0'
           RUBY
         end
+      end
+    end
+  end
+
+  describe 'RBS::Inline annotation' do
+    context 'when config option is disabled' do
+      let(:cop_config) { { 'AllowRBSInlineAnnotation' => false } }
+
+      it 'registers an offense and corrects using RBS::Inline annotation' do
+        expect_offense(<<~RUBY)
+          include Enumerable #[Integer]
+                             ^^^^^^^^^^ Missing space after `#`.
+
+          attr_reader :name #: String
+                            ^^^^^^^^^ Missing space after `#`.
+          attr_reader :age  #: Integer?
+                            ^^^^^^^^^^^ Missing space after `#`.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          include Enumerable # [Integer]
+
+          attr_reader :name # : String
+          attr_reader :age  # : Integer?
+        RUBY
+      end
+    end
+
+    context 'when config option is enabled' do
+      let(:cop_config) { { 'AllowRBSInlineAnnotation' => true } }
+
+      it 'does not register an offense when using RBS::Inline annotation' do
+        expect_no_offenses(<<~RUBY)
+          include Enumerable #[Integer]
+
+          attr_reader :name #: String
+          attr_reader :age  #: Integer?
+        RUBY
+      end
+    end
+  end
+
+  describe 'Steep annotation' do
+    context 'when config option is disabled' do
+      let(:cop_config) { { 'AllowSteepAnnotation' => false } }
+
+      it 'registers an offense and corrects using Steep annotation' do
+        expect_offense(<<~RUBY)
+          [1, 2, 3].each_with_object([]) do |n, list| #$ Array[Integer]
+                                                      ^^^^^^^^^^^^^^^^^ Missing space after `#`.
+            list << n
+          end
+
+          name = 'John'      #: String
+                             ^^^^^^^^^ Missing space after `#`.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          [1, 2, 3].each_with_object([]) do |n, list| # $ Array[Integer]
+            list << n
+          end
+
+          name = 'John'      # : String
+        RUBY
+      end
+    end
+
+    context 'when config option is enabled' do
+      let(:cop_config) { { 'AllowSteepAnnotation' => true } }
+
+      it 'does not register an offense when using Steep annotation' do
+        expect_no_offenses(<<~RUBY)
+          [1, 2, 3].each_with_object([]) do |n, list| #$ Array[Integer]
+            list << n
+          end
+
+          name = 'John'      #: String
+        RUBY
       end
     end
   end

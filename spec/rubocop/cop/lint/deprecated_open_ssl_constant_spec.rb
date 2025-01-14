@@ -56,7 +56,7 @@ RSpec.describe RuboCop::Cop::Lint::DeprecatedOpenSSLConstant, :config do
     RUBY
   end
 
-  RuboCop::Cop::Lint::DeprecatedOpenSSLConstant::NO_ARG_ALGORITHM.each do |algorithm_name|
+  described_class::NO_ARG_ALGORITHM.each do |algorithm_name|
     it 'registers an offense with cipher constant and no arguments and corrects' do
       expect_offense(<<~RUBY, algorithm_name: algorithm_name)
         OpenSSL::Cipher::#{algorithm_name}.new
@@ -93,9 +93,15 @@ RSpec.describe RuboCop::Cop::Lint::DeprecatedOpenSSLConstant, :config do
     RUBY
   end
 
-  it 'does not register an offense with cipher constant and send argument is a method' do
+  it 'does not register an offense with cipher constant and argument is a method call' do
     expect_no_offenses(<<~RUBY)
       OpenSSL::Cipher::AES128.new(do_something)
+    RUBY
+  end
+
+  it 'does not register an offense with cipher constant and argument is a safe navigation method call' do
+    expect_no_offenses(<<~RUBY)
+      OpenSSL::Cipher::AES128.new(foo&.bar)
     RUBY
   end
 
@@ -105,7 +111,7 @@ RSpec.describe RuboCop::Cop::Lint::DeprecatedOpenSSLConstant, :config do
     RUBY
   end
 
-  it 'registers an offense when building an instance using an digest constant and corrects' do
+  it 'registers an offense when building an instance using a digest constant and corrects' do
     expect_offense(<<~RUBY)
       OpenSSL::Digest::SHA256.new
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use `OpenSSL::Digest.new('SHA256')` instead of `OpenSSL::Digest::SHA256.new`.
@@ -127,7 +133,7 @@ RSpec.describe RuboCop::Cop::Lint::DeprecatedOpenSSLConstant, :config do
     RUBY
   end
 
-  it 'registers an offense when using an digest constant with chained methods and corrects' do
+  it 'registers an offense when using a digest constant with chained methods and corrects' do
     expect_offense(<<~RUBY)
       OpenSSL::Digest::SHA256.new.digest('foo')
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use `OpenSSL::Digest.new('SHA256')` instead of `OpenSSL::Digest::SHA256.new`.

@@ -179,7 +179,7 @@ module RuboCop
         end
 
         def looks_like_trivial_reader?(node)
-          !node.arguments? && node.body && node.body.ivar_type?
+          !node.arguments? && node.body&.ivar_type?
         end
 
         def trivial_writer?(node)
@@ -238,7 +238,7 @@ module RuboCop
 
           indent = ' ' * node.loc.column
           corrector.replace(
-            node.source_range,
+            node,
             ['class << self',
              "#{indent}  #{accessor(kind, node.method_name)}",
              "#{indent}end"].join("\n")

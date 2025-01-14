@@ -22,13 +22,9 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   %w('foo', "bar")
       #
-      # @example
-      #
       #   # good
-      #
       #   %w(foo bar)
       class PercentStringArray < Base
         include PercentLiteral
@@ -50,7 +46,7 @@ module RuboCop
 
           add_offense(node) do |corrector|
             node.each_value do |value|
-              range = value.loc.expression
+              range = value.source_range
 
               match = range.source.match(TRAILING_QUOTE)
               corrector.remove_trailing(range, match[0].length) if match

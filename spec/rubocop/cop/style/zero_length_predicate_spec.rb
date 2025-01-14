@@ -13,6 +13,17 @@ RSpec.describe RuboCop::Cop::Style::ZeroLengthPredicate, :config do
       RUBY
     end
 
+    it 'registers an offense for `array&.length == 0`' do
+      expect_offense(<<~RUBY)
+        [1, 2, 3]&.length == 0
+        ^^^^^^^^^^^^^^^^^^^^^^ Use `empty?` instead of `length == 0`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        [1, 2, 3]&.empty?
+      RUBY
+    end
+
     it 'registers an offense for `array.size == 0`' do
       expect_offense(<<~RUBY)
         [1, 2, 3].size == 0
@@ -32,6 +43,28 @@ RSpec.describe RuboCop::Cop::Style::ZeroLengthPredicate, :config do
 
       expect_correction(<<~RUBY)
         [1, 2, 3].empty?
+      RUBY
+    end
+
+    it 'registers an offense for `array&.length.zero?`' do
+      expect_offense(<<~RUBY)
+        [1, 2, 3]&.length.zero?
+                   ^^^^^^^^^^^^ Use `empty?` instead of `length.zero?`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        [1, 2, 3]&.empty?
+      RUBY
+    end
+
+    it 'registers an offense for `array&.length&.zero?`' do
+      expect_offense(<<~RUBY)
+        [1, 2, 3]&.length&.zero?
+                   ^^^^^^^^^^^^^ Use `empty?` instead of `length&.zero?`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        [1, 2, 3]&.empty?
       RUBY
     end
 
@@ -79,6 +112,17 @@ RSpec.describe RuboCop::Cop::Style::ZeroLengthPredicate, :config do
       RUBY
     end
 
+    it 'registers an offense for `array&.length < 1`' do
+      expect_offense(<<~RUBY)
+        array&.length < 1
+        ^^^^^^^^^^^^^^^^^ Use `empty?` instead of `length < 1`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        array&.empty?
+      RUBY
+    end
+
     it 'registers an offense for `array.size < 1`' do
       expect_offense(<<~RUBY)
         [1, 2, 3].size < 1
@@ -101,6 +145,17 @@ RSpec.describe RuboCop::Cop::Style::ZeroLengthPredicate, :config do
       RUBY
     end
 
+    it 'registers an offense for `1 > array&.length`' do
+      expect_offense(<<~RUBY)
+        1 > array&.length
+        ^^^^^^^^^^^^^^^^^ Use `empty?` instead of `1 > length`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        array&.empty?
+      RUBY
+    end
+
     it 'registers an offense for `1 > array.size`' do
       expect_offense(<<~RUBY)
         1 > [1, 2, 3].size
@@ -120,6 +175,12 @@ RSpec.describe RuboCop::Cop::Style::ZeroLengthPredicate, :config do
 
       expect_correction(<<~RUBY)
         ![1, 2, 3].empty?
+      RUBY
+    end
+
+    it 'does not register an offense for `array&.length > 0`' do
+      expect_no_offenses(<<~RUBY)
+        [1, 2, 3]&.length > 0
       RUBY
     end
 
@@ -403,44 +464,106 @@ RSpec.describe RuboCop::Cop::Style::ZeroLengthPredicate, :config do
 
   context 'when inspecting a StringIO object' do
     context 'when initialized with a string' do
-      it 'does not register an offense' do
+      it 'does not register an offense using `size == 0`' do
         expect_no_offenses(<<~RUBY)
           StringIO.new('foo').size == 0
         RUBY
       end
 
-      it 'does not register an offense with top-level ::StringIO' do
+      it 'does not register an offense with top-level ::StringIO using `size == 0`' do
         expect_no_offenses(<<~RUBY)
           ::StringIO.new('foo').size == 0
+        RUBY
+      end
+
+      it 'does not register an offense using `size.zero?`' do
+        expect_no_offenses(<<~RUBY)
+          StringIO.new('foo').size.zero?
+        RUBY
+      end
+
+      it 'does not register an offense with top-level ::StringIO using `size.zero?`' do
+        expect_no_offenses(<<~RUBY)
+          ::StringIO.new('foo').size.zero?
         RUBY
       end
     end
 
     context 'when initialized without arguments' do
-      it 'does not register an offense' do
+      it 'does not register an offense using `size == 0`' do
         expect_no_offenses(<<~RUBY)
           StringIO.new.size == 0
         RUBY
       end
 
-      it 'does not register an offense with top-level ::StringIO' do
+      it 'does not register an offense with top-level ::StringIO using `size == 0`' do
         expect_no_offenses(<<~RUBY)
           ::StringIO.new.size == 0
+        RUBY
+      end
+
+      it 'does not register an offense using `size.zero?`' do
+        expect_no_offenses(<<~RUBY)
+          StringIO.new.size.zero?
+        RUBY
+      end
+
+      it 'does not register an offense with top-level ::StringIO using `size.zero?`' do
+        expect_no_offenses(<<~RUBY)
+          ::StringIO.new.size.zero?
         RUBY
       end
     end
   end
 
+  context 'when inspecting a File object' do
+    it 'does not register an offense using `size == 0`' do
+      expect_no_offenses(<<~RUBY)
+        File.new('foo').size == 0
+      RUBY
+    end
+
+    it 'does not register an offense with top-level ::File using `size == 0`' do
+      expect_no_offenses(<<~RUBY)
+        ::File.new('foo').size == 0
+      RUBY
+    end
+
+    it 'does not register an offense using `size.zero?`' do
+      expect_no_offenses(<<~RUBY)
+        File.new('foo').size.zero?
+      RUBY
+    end
+
+    it 'does not register an offense with top-level ::File using `size.zero?`' do
+      expect_no_offenses(<<~RUBY)
+        ::File.new('foo').size.zero?
+      RUBY
+    end
+  end
+
   context 'when inspecting a Tempfile object' do
-    it 'does not register an offense' do
+    it 'does not register an offense using `size == 0`' do
       expect_no_offenses(<<~RUBY)
         Tempfile.new('foo').size == 0
       RUBY
     end
 
-    it 'does not register an offense with top-level ::Tempfile' do
+    it 'does not register an offense with top-level ::Tempfile using `size == 0`' do
       expect_no_offenses(<<~RUBY)
         ::Tempfile.new('foo').size == 0
+      RUBY
+    end
+
+    it 'does not register an offense using `size.zero?`' do
+      expect_no_offenses(<<~RUBY)
+        Tempfile.new('foo').size.zero?
+      RUBY
+    end
+
+    it 'does not register an offense with top-level ::Tempfile using `size.zero?`' do
+      expect_no_offenses(<<~RUBY)
+        ::Tempfile.new('foo').size.zero?
       RUBY
     end
   end

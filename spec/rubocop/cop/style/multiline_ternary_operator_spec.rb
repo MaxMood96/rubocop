@@ -50,6 +50,28 @@ RSpec.describe RuboCop::Cop::Style::MultilineTernaryOperator, :config do
     RUBY
   end
 
+  it 'registers an offense and corrects when nesting multiline ternary operators' do
+    expect_offense(<<~RUBY)
+      cond_a? ? foo :
+      ^^^^^^^^^^^^^^^ Avoid multi-line ternary operators, use `if` or `unless` instead.
+        cond_b? ? bar :
+        ^^^^^^^^^^^^^^^ Avoid multi-line ternary operators, use `if` or `unless` instead.
+          cond_c? ? baz : qux
+    RUBY
+
+    expect_correction(<<~RUBY)
+      if cond_a?
+        foo
+      else
+        if cond_b?
+        bar
+      else
+        cond_c? ? baz : qux
+      end
+      end
+    RUBY
+  end
+
   it 'registers an offense and corrects when everything is on a separate line' do
     expect_offense(<<~RUBY)
       a = cond ?
@@ -124,7 +146,16 @@ RSpec.describe RuboCop::Cop::Style::MultilineTernaryOperator, :config do
     RUBY
   end
 
-  it 'register an offense and corrects when returning a multiline ternary operator expression with `return`' do
+  it 'does not register an offense when using a method call as a ternary operator condition with a line break ' \
+     'between receiver and method' do
+    # NOTE: Redundant line break is corrected by `Layout/RedundantLineBreak`.
+    expect_no_offenses(<<~RUBY)
+      do_something(arg
+                     .foo ? bar : baz)
+    RUBY
+  end
+
+  it 'registers an offense and corrects when returning a multiline ternary operator expression with `return`' do
     expect_offense(<<~RUBY)
       return cond ?
              ^^^^^^ Avoid multi-line ternary operators, use single-line instead.
@@ -137,33 +168,35 @@ RSpec.describe RuboCop::Cop::Style::MultilineTernaryOperator, :config do
     RUBY
   end
 
-  it 'register an offense and corrects when returning a multiline ternary operator expression with `break`' do
-    expect_offense(<<~RUBY)
-      break cond ?
-            ^^^^^^ Avoid multi-line ternary operators, use single-line instead.
-            foo :
-            bar
-    RUBY
+  context 'Ruby <= 3.2', :ruby32, unsupported_on: :prism do
+    it 'registers an offense and corrects when returning a multiline ternary operator expression with `break`' do
+      expect_offense(<<~RUBY)
+        break cond ?
+              ^^^^^^ Avoid multi-line ternary operators, use single-line instead.
+              foo :
+              bar
+      RUBY
 
-    expect_correction(<<~RUBY)
-      break cond ? foo : bar
-    RUBY
+      expect_correction(<<~RUBY)
+        break cond ? foo : bar
+      RUBY
+    end
+
+    it 'registers an offense and corrects when returning a multiline ternary operator expression with `next`' do
+      expect_offense(<<~RUBY)
+        next cond ?
+             ^^^^^^ Avoid multi-line ternary operators, use single-line instead.
+             foo :
+             bar
+      RUBY
+
+      expect_correction(<<~RUBY)
+        next cond ? foo : bar
+      RUBY
+    end
   end
 
-  it 'register an offense and corrects when returning a multiline ternary operator expression with `next`' do
-    expect_offense(<<~RUBY)
-      next cond ?
-           ^^^^^^ Avoid multi-line ternary operators, use single-line instead.
-           foo :
-           bar
-    RUBY
-
-    expect_correction(<<~RUBY)
-      next cond ? foo : bar
-    RUBY
-  end
-
-  it 'register an offense and corrects when returning a multiline ternary operator expression with method call' do
+  it 'registers an offense and corrects when returning a multiline ternary operator expression with method call' do
     expect_offense(<<~RUBY)
       do_something cond ?
                    ^^^^^^ Avoid multi-line ternary operators, use single-line instead.
@@ -173,6 +206,19 @@ RSpec.describe RuboCop::Cop::Style::MultilineTernaryOperator, :config do
 
     expect_correction(<<~RUBY)
       do_something cond ? foo : bar
+    RUBY
+  end
+
+  it 'registers an offense and corrects when returning a multiline ternary operator expression with safe navigation method call' do
+    expect_offense(<<~RUBY)
+      obj&.do_something cond ?
+                        ^^^^^^ Avoid multi-line ternary operators, use single-line instead.
+                        foo :
+                        bar
+    RUBY
+
+    expect_correction(<<~RUBY)
+      obj&.do_something cond ? foo : bar
     RUBY
   end
 

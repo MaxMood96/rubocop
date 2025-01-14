@@ -19,8 +19,6 @@ module RuboCop
       #   # good
       #   true
       #
-      # @example
-      #
       #   # bad
       #   :false
       #
@@ -38,7 +36,7 @@ module RuboCop
           return unless boolean_symbol?(node)
 
           parent = node.parent
-          return if parent&.array_type? && parent&.percent_literal?(:symbol)
+          return if parent&.array_type? && parent.percent_literal?(:symbol)
 
           add_offense(node, message: format(MSG, boolean: node.value)) do |corrector|
             autocorrect(corrector, node)

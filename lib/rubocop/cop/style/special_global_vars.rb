@@ -3,8 +3,7 @@
 module RuboCop
   module Cop
     module Style
-      #
-      # This cop looks for uses of Perl-style global variables.
+      # Looks for uses of Perl-style global variables.
       # Correcting to global variables in the 'English' library
       # will add a require statement to the top of the file if
       # enabled by RequireEnglish config.
@@ -59,9 +58,8 @@ module RuboCop
       #
       # @example EnforcedStyle: use_builtin_english_names
       #
-      # Like `use_perl_names` but allows builtin global vars.
-      #
       #   # good
+      #   # Like `use_perl_names` but allows builtin global vars.
       #   puts $LOAD_PATH
       #   puts $LOADED_FEATURES
       #   puts $PROGRAM_NAME
@@ -151,7 +149,7 @@ module RuboCop
         end
 
         def on_gvar(node)
-          global_var, = *node
+          global_var = node.name
 
           return unless (preferred = preferred_names(global_var))
 
@@ -234,9 +232,9 @@ module RuboCop
         end
 
         def matching_styles(global)
-          STYLE_VARS_MAP.map do |style, vars|
+          STYLE_VARS_MAP.filter_map do |style, vars|
             style if vars.values.flatten(1).include? global
-          end.compact
+          end
         end
 
         def english_name_replacement(preferred_name, node)

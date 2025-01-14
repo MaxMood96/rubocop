@@ -16,6 +16,100 @@ RSpec.describe RuboCop::Cop::Style::CombinableLoops, :config do
         items.reverse_each { |item| do_something_else(item, arg) }
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
       RUBY
+
+      expect_correction(<<~RUBY)
+        items.each { |item| do_something(item)
+        do_something_else(item, arg) }
+
+        items.each_with_index { |item| do_something(item)
+        do_something_else(item, arg) }
+
+        items.reverse_each { |item| do_something(item)
+        do_something_else(item, arg) }
+      RUBY
+    end
+
+    it 'registers an offense when looping over the same data for the second consecutive time' do
+      expect_offense(<<~RUBY)
+        items.each do |item| foo(item) end
+        items.each { |item| bar(item) }
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+        do_something
+      RUBY
+
+      expect_correction(<<~RUBY)
+        items.each do |item| foo(item)
+        bar(item)  end
+        do_something
+      RUBY
+    end
+
+    it 'registers an offense when looping over the same data for the third consecutive time' do
+      expect_offense(<<~RUBY)
+        items.each { |item| foo(item) }
+        items.each { |item| bar(item) }
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+        items.each { |item| baz(item) }
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        items.each { |item| foo(item)
+        bar(item)
+        baz(item) }
+      RUBY
+    end
+
+    it 'registers an offense and does not correct when looping over the same data with different block variable names' do
+      expect_offense(<<~RUBY)
+        items.each { |item| foo(item) }
+        items.each { |x| bar(x) }
+        ^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+      RUBY
+
+      expect_no_corrections
+    end
+
+    it 'registers an offense when looping over the same data for the third consecutive time with numbered blocks' do
+      expect_offense(<<~RUBY)
+        items.each { foo(_1) }
+        items.each { bar(_1) }
+        ^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+        items.each { baz(_1) }
+        ^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        items.each { foo(_1)
+        bar(_1)
+        baz(_1) }
+      RUBY
+    end
+
+    it 'registers an offense when looping over the same data as previous loop in `do`...`end` and `{`...`}` blocks' do
+      expect_offense(<<~RUBY)
+        items.each do |item| do_something(item) end
+        items.each { |item| do_something_else item, arg}
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        items.each do |item| do_something(item)
+        do_something_else item, arg end
+      RUBY
+    end
+
+    it 'registers an offense when looping over the same data as previous loop in `{`...`}` and `do`...`end` blocks' do
+      expect_offense(<<~RUBY)
+        items.each { |item| do_something(item) }
+        items.each do |item| do_something_else(item, arg) end
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        items.each { |item| do_something(item)
+        do_something_else(item, arg) }
+      RUBY
     end
 
     context 'Ruby 2.7' do
@@ -32,6 +126,17 @@ RSpec.describe RuboCop::Cop::Style::CombinableLoops, :config do
           items.reverse_each { do_something(_1) }
           items.reverse_each { do_something_else(_1, arg) }
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          items.each { do_something(_1)
+          do_something_else(_1, arg) }
+
+          items.each_with_index { do_something(_1)
+          do_something_else(_1, arg) }
+
+          items.reverse_each { do_something(_1)
+          do_something_else(_1, arg) }
         RUBY
       end
     end
@@ -92,6 +197,11 @@ RSpec.describe RuboCop::Cop::Style::CombinableLoops, :config do
         for item in items do do_something_else(item, arg) end
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Combine this loop with the previous loop.
       RUBY
+
+      expect_correction(<<~RUBY)
+        for item in items do do_something(item)
+        do_something_else(item, arg) end
+      RUBY
     end
 
     it 'does not register an offense when the same loops are interleaved with some code' do
@@ -118,6 +228,13 @@ RSpec.describe RuboCop::Cop::Style::CombinableLoops, :config do
         else
           for item in items do do_something_else(item, arg) end
         end
+      RUBY
+    end
+
+    it 'does not register an offense when one of the loops is empty' do
+      expect_no_offenses(<<~RUBY)
+        items.each {}
+        items.each {}
       RUBY
     end
   end

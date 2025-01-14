@@ -17,11 +17,11 @@ module RuboCop
       class Exec < Base
         def run
           ensure_server!
-          Cache.status_path.delete if Cache.status_path.file?
+          read_stdin = ARGV.include?('-s') || ARGV.include?('--stdin')
           send_request(
             command: 'exec',
             args: ARGV.dup,
-            body: $stdin.tty? ? '' : $stdin.read
+            body: read_stdin ? $stdin.read : ''
           )
           warn stderr unless stderr.empty?
           status
@@ -31,7 +31,7 @@ module RuboCop
 
         def ensure_server!
           if incompatible_version?
-            puts 'RuboCop version incompatibility found, RuboCop server restarting...'
+            warn 'RuboCop version incompatibility found, RuboCop server restarting...'
             ClientCommand::Stop.new.run
           elsif check_running_server
             return
@@ -41,7 +41,7 @@ module RuboCop
         end
 
         def incompatible_version?
-          Cache.version_path.read != RuboCop::Version::STRING
+          Cache.version_path.read != Cache.restart_key
         end
 
         def stderr
@@ -54,7 +54,7 @@ module RuboCop
           end
 
           status = Cache.status_path.read
-          raise "RuboCop server: '#{status}' is not a valid status!" if (status =~ /^\d+$/).nil?
+          raise "RuboCop server: '#{status}' is not a valid status!" unless /\A\d+\z/.match?(status)
 
           status.to_i
         end

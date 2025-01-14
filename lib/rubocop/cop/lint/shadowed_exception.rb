@@ -67,7 +67,7 @@ module RuboCop
         def on_rescue(node)
           return if rescue_modifier?(node)
 
-          _body, *rescues, _else = *node
+          rescues = node.resbody_branches
           rescued_groups = rescued_groups_for(rescues)
 
           rescue_group_rescues_multiple_levels = rescued_groups.any? do |group|
@@ -83,7 +83,7 @@ module RuboCop
 
         def offense_range(rescues)
           shadowing_rescue = find_shadowing_rescue(rescues)
-          expression = shadowing_rescue.loc.expression
+          expression = shadowing_rescue.source_range
           range_between(expression.begin_pos, expression.end_pos)
         end
 
@@ -121,18 +121,12 @@ module RuboCop
 
           if rescued_exceptions.any?
             rescued_exceptions.each_with_object([]) do |exception, converted|
-              # FIXME: Workaround `rubocop:disable` comment for JRuby.
-              #        https://github.com/jruby/jruby/issues/6642
-              # rubocop:disable Style/RedundantBegin
-              begin
-                RuboCop::Util.silence_warnings do
-                  # Avoid printing deprecation warnings about constants
-                  converted << Kernel.const_get(exception.source)
-                end
-              rescue NameError
-                converted << nil
+              RuboCop::Util.silence_warnings do
+                # Avoid printing deprecation warnings about constants
+                converted << Kernel.const_get(exception.source)
               end
-              # rubocop:enable Style/RedundantBegin
+            rescue NameError
+              converted << nil
             end
           else
             # treat an empty `rescue` as `rescue StandardError`

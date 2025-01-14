@@ -5,7 +5,7 @@ module RuboCop
     module Lint
       # Checks for blocks without a body.
       # Such empty blocks are typically an oversight or we should provide a comment
-      # be clearer what we're aiming for.
+      # to clarify what we're aiming for.
       #
       # Empty lambdas and procs are ignored by default.
       #
@@ -77,7 +77,7 @@ module RuboCop
           return false unless processed_source.contains_comment?(node.source_range)
 
           line_comment = processed_source.comment_at_line(node.source_range.line)
-          !line_comment || !comment_disables_cop?(line_comment.loc.expression.source)
+          !line_comment || !comment_disables_cop?(line_comment.source)
         end
 
         def allow_empty_lambdas?

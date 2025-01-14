@@ -32,7 +32,10 @@ module RuboCop
 
         # @!method map_to_set?(node)
         def_node_matcher :map_to_set?, <<~PATTERN
-          $(send (block $(send _ {:map :collect}) ...) :to_set)
+          {
+            $(call ({block numblock} $(call _ {:map :collect}) ...) :to_set)
+            $(call $(call _ {:map :collect} (block_pass sym)) :to_set)
+          }
         PATTERN
 
         def on_send(node)
@@ -41,11 +44,12 @@ module RuboCop
           message = format(MSG, method: map_node.loc.selector.source)
           add_offense(map_node.loc.selector, message: message) do |corrector|
             # If the `to_set` call already has a block, do not autocorrect.
-            next if to_set_node.block_node
+            next if to_set_node.block_literal?
 
             autocorrect(corrector, to_set_node, map_node)
           end
         end
+        alias on_csend on_send
 
         private
 

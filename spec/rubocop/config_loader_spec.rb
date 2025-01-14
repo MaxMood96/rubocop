@@ -9,12 +9,14 @@ RSpec.describe RuboCop::ConfigLoader do
     described_class.debug = true
     # Force reload of default configuration
     described_class.default_configuration = nil
+    RuboCop::ConfigFinder.project_root = nil
   end
 
   after do
     described_class.debug = false
     # Remove custom configuration
     described_class.default_configuration = nil
+    RuboCop::ConfigFinder.project_root = nil
   end
 
   let(:default_config) { described_class.default_configuration }
@@ -26,6 +28,64 @@ RSpec.describe RuboCop::ConfigLoader do
       let(:dir_path) { 'dir' }
 
       before { create_empty_file('dir/example.rb') }
+
+      context 'but a config file exists in .config/.rubocop.yml of the project root' do
+        before do
+          create_empty_file('Gemfile')
+          create_empty_file('.config/.rubocop.yml')
+        end
+
+        it 'returns the path to the file in .config directory' do
+          expect(configuration_file_for).to end_with('.config/.rubocop.yml')
+        end
+      end
+
+      context 'but a config file exists in both .config/.rubocop.yml of the project root and home directory' do
+        before do
+          create_empty_file('Gemfile')
+          create_empty_file('.config/.rubocop.yml')
+          create_empty_file('~/.rubocop.yml')
+        end
+
+        it 'returns the path to the file in .config directory' do
+          expect(configuration_file_for).to end_with('.config/.rubocop.yml')
+        end
+      end
+
+      context 'but a config file exists in .config/rubocop/config.yml of the project root' do
+        before do
+          create_empty_file('Gemfile')
+          create_empty_file('.config/rubocop/config.yml')
+        end
+
+        it 'returns the path to the file in .config/rubocop directory' do
+          expect(configuration_file_for).to end_with('.config/rubocop/config.yml')
+        end
+      end
+
+      context 'but a config file exists in both .config/.rubocop.yml and .config/rubocop/config.yml of the project root' do
+        before do
+          create_empty_file('Gemfile')
+          create_empty_file('.config/.rubocop.yml')
+          create_empty_file('.config/rubocop/config.yml')
+        end
+
+        it 'returns the path to the file in .config directory' do
+          expect(configuration_file_for).to end_with('.config/.rubocop.yml')
+        end
+      end
+
+      context 'but a config file exists in both .config//rubocop/config.yml of the project root and home directory' do
+        before do
+          create_empty_file('Gemfile')
+          create_empty_file('.config/rubocop/config.yml')
+          create_empty_file('~/.rubocop.yml')
+        end
+
+        it 'returns the path to the file in .config/rubocop directory' do
+          expect(configuration_file_for).to end_with('.config/rubocop/config.yml')
+        end
+      end
 
       context 'but a config file exists in home directory' do
         before { create_empty_file('~/.rubocop.yml') }
@@ -283,7 +343,7 @@ RSpec.describe RuboCop::ConfigLoader do
       end
 
       it 'gets an Include that is relative to the subdirectory' do
-        expect(configuration_from_file['Style/StringLiterals']['Include']).to eq(['dir/**/*.rb'])
+        expect(configuration_from_file['Style/StringLiterals']['Include']).to eq(['**/*.rb'])
       end
 
       it 'ignores parent AllCops/Exclude if ignore_parent_exclusion is true' do
@@ -300,8 +360,8 @@ RSpec.describe RuboCop::ConfigLoader do
 
         configuration = config_loader.configuration_from_file(sub_file_path)
         excludes = configuration['AllCops']['Exclude']
-        expect(excludes.include?(File.expand_path('vendor/**'))).to be(false)
-        expect(excludes.include?(File.expand_path('vendor/foo'))).to be(true)
+        expect(excludes).not_to include(File.expand_path('vendor/**'))
+        expect(excludes).to include(File.expand_path('vendor/foo'))
       end
     end
 
@@ -341,7 +401,7 @@ RSpec.describe RuboCop::ConfigLoader do
       end
 
       it 'gets an Include that is relative to the subdirectory' do
-        expect(configuration_from_file['Style/StringLiterals']['Include']).to eq(['src/**/*.rb'])
+        expect(configuration_from_file['Style/StringLiterals']['Include']).to eq(['../src/**/*.rb'])
       end
     end
 
@@ -576,7 +636,7 @@ RSpec.describe RuboCop::ConfigLoader do
         end.not_to output(/overrides the same parameter/).to_stdout
       end
 
-      it 'overwrites the Exclude from the parent when the cop overridesthe global inherit_mode' do
+      it 'overwrites the Exclude from the parent when the cop overrides the global inherit_mode' do
         expect do
           excludes = configuration_from_file['Style/Dir']['Exclude']
           expect(excludes).to eq([File.expand_path('spec/requests/group_invite_spec.rb')])
@@ -678,7 +738,7 @@ RSpec.describe RuboCop::ConfigLoader do
           .to contain_exactly('foo.rb', 'test.rb')
         expect(examples_configuration['Include']).to contain_exactly('bar.rb', 'another_test.rb')
         expect(examples_configuration['AllowedIdentifiers'])
-          .to contain_exactly(*%w[capture3 iso8601 rfc1123_date rfc2822 rfc3339 rfc822 iso2 x86_64])
+          .to match_array(%w[capture3 iso8601 rfc1123_date rfc2822 rfc3339 rfc822 iso2 x86_64])
       end
     end
 
@@ -852,7 +912,7 @@ RSpec.describe RuboCop::ConfigLoader do
             .to output(
               a_string_including(
                 '.rubocop.yml: Custom/Loop has the ' \
-                "wrong namespace - should be Lint\n"
+                "wrong namespace - replace it with Lint/Loop\n"
               )
             ).to_stderr
         end
@@ -935,7 +995,8 @@ RSpec.describe RuboCop::ConfigLoader do
               'AllowURI' => true,
               'URISchemes' => %w[http https],
               'IgnoreCopDirectives' => true,
-              'AllowedPatterns' => []
+              'AllowedPatterns' => [],
+              'SplitStrings' => false
             },
             'Metrics/MethodLength' => {
               'Description' =>
@@ -953,7 +1014,7 @@ RSpec.describe RuboCop::ConfigLoader do
               'AllowedPatterns' => []
             }
           )
-        expect { expect(configuration_from_file.to_h).to eq(config) }.to output('').to_stderr
+        expect { expect(configuration_from_file.to_h).to eq(config) }.not_to output.to_stderr
       end
     end
 
@@ -992,7 +1053,7 @@ RSpec.describe RuboCop::ConfigLoader do
                      'Max' => 200 }            # special.yml takes precedence
         expect do
           expect(configuration_from_file['Metrics/MethodLength']
-                   .to_set.superset?(expected.to_set)).to be(true)
+                   .to_set).to be_superset(expected.to_set)
         end.to output(Regexp.new(<<~OUTPUT)).to_stdout
           .rubocop.yml: Metrics/MethodLength:Enabled overrides the same parameter in special.yml
           .rubocop.yml: Metrics/MethodLength:Enabled overrides the same parameter in normal.yml
@@ -1001,7 +1062,7 @@ RSpec.describe RuboCop::ConfigLoader do
       end
     end
 
-    context 'when a file inherits and overrides with non-namedspaced cops' do
+    context 'when a file inherits and overrides with non-namespaced cops' do
       let(:file_path) { '.rubocop.yml' }
 
       before do
@@ -1038,7 +1099,8 @@ RSpec.describe RuboCop::ConfigLoader do
               'AllowURI' => true,
               'URISchemes' => %w[http https],
               'IgnoreCopDirectives' => true,
-              'AllowedPatterns' => []
+              'AllowedPatterns' => [],
+              'SplitStrings' => false
             }
           )
 
@@ -1149,8 +1211,8 @@ RSpec.describe RuboCop::ConfigLoader do
                        'Max' => 200 }            # inherited from somegem
           expect do
             expect(configuration_from_file['Metrics/MethodLength']
-                    .to_set.superset?(expected.to_set)).to be(true)
-          end.to output('').to_stderr
+                    .to_set).to be_superset(expected.to_set)
+          end.not_to output.to_stderr
 
           expected = { 'Enabled' => true, # gemtwo/config/default.yml
                        'Max' => 72,              # gemtwo/config/strict.yml
@@ -1158,8 +1220,27 @@ RSpec.describe RuboCop::ConfigLoader do
                        'AllowURI' => false }     # overridden in .rubocop.yml
           expect(
             configuration_from_file['Layout/LineLength']
-              .to_set.superset?(expected.to_set)
-          ).to be(true)
+              .to_set
+          ).to be_superset(expected.to_set)
+        end
+
+        context 'bundler isolated', :isolated_bundler do
+          it 'loads' do
+            expect { configuration_from_file }.not_to raise_error
+          end
+
+          context 'when the gemfile contains an uninstalled git source' do
+            before do
+              create_file('Gemfile', <<~GEMFILE)
+                gem 'rubocop', github: 'rubocop/rubocop'
+                gem 'some_other_gem'
+              GEMFILE
+            end
+
+            it 'loads' do
+              expect { configuration_from_file }.not_to raise_error
+            end
+          end
         end
       end
 
@@ -1185,8 +1266,8 @@ RSpec.describe RuboCop::ConfigLoader do
                        'Max' => 200 }            # inherited from somegem
           expect do
             expect(configuration_from_file['Metrics/MethodLength']
-                    .to_set.superset?(expected.to_set)).to be(true)
-          end.to output('').to_stderr
+                    .to_set).to be_superset(expected.to_set)
+          end.not_to output.to_stderr
 
           expected = { 'Enabled' => true, # gemtwo/config/default.yml
                        'Max' => 72,              # gemtwo/config/strict.yml
@@ -1194,8 +1275,8 @@ RSpec.describe RuboCop::ConfigLoader do
                        'AllowURI' => false }     # overridden in .rubocop.yml
           expect(
             configuration_from_file['Layout/LineLength']
-              .to_set.superset?(expected.to_set)
-          ).to be(true)
+              .to_set
+          ).to be_superset(expected.to_set)
         end
       end
     end
@@ -1254,8 +1335,8 @@ RSpec.describe RuboCop::ConfigLoader do
       end
 
       it 'creates the cached file alongside the owning file' do
-        expect { configuration_from_file }.to output('').to_stderr
-        expect(File.exist?(cache_file)).to be true
+        expect { configuration_from_file }.not_to output.to_stderr
+        expect(File).to exist(cache_file)
       end
     end
 
@@ -1282,8 +1363,8 @@ RSpec.describe RuboCop::ConfigLoader do
 
       it 'downloads the inherited file from the same url and caches it' do
         configuration_from_file
-        expect(File.exist?(cache_file)).to be true
-        expect(File.exist?(cache_file2)).to be true
+        expect(File).to exist(cache_file)
+        expect(File).to exist(cache_file2)
       end
     end
 
@@ -1689,6 +1770,32 @@ RSpec.describe RuboCop::ConfigLoader do
       expect(configuration.to_h).to eq({})
     end
 
+    it 'rejects non-allowed yaml types' do
+      create_file(configuration_path, <<~YAML)
+        foo: !ruby/object:Rational
+          numerator: 1
+          denominator: 2
+      YAML
+
+      expect { load_file }.to raise_error(Psych::DisallowedClass, /Rational/)
+    end
+
+    it 'allows yaml anchors' do
+      create_file(configuration_path, <<~YAML)
+        Style/Alias: &anchor
+          Enabled: false
+        Style/Encoding:
+          <<: *anchor
+      YAML
+
+      expect(load_file.to_h).to eq(
+        {
+          'Style/Alias' => { 'Enabled' => false },
+          'Style/Encoding' => { 'Enabled' => false }
+        }
+      )
+    end
+
     context 'set neither true nor false to value to Enabled' do
       before do
         create_file(configuration_path, <<~YAML)
@@ -1703,6 +1810,24 @@ RSpec.describe RuboCop::ConfigLoader do
         end.to raise_error(
           RuboCop::ValidationError,
           /supposed to be a boolean and disable is not/
+        )
+      end
+    end
+
+    context 'does not set `always`, `contextual`, `disabled`, or boolean to `AutoCorrect`' do
+      before do
+        create_file(configuration_path, <<~YAML)
+          Layout/EmptyComment:
+            AutoCorrect: unknown
+        YAML
+      end
+
+      it 'gets a warning message' do
+        expect do
+          load_file
+        end.to raise_error(
+          RuboCop::ValidationError,
+          /supposed to be `always`, `contextual`, `disabled`, or a boolean and unknown is not/
         )
       end
     end
@@ -1773,6 +1898,38 @@ RSpec.describe RuboCop::ConfigLoader do
 
         it 'does not raise an error' do
           expect { load_file }.not_to raise_error
+        end
+      end
+    end
+
+    context 'when inheriting from a remote file' do
+      let(:remote_config_parent) { <<~YAML }
+        inherit_from: './child.yml'
+
+        AllCops:
+          TargetRubyVersion: 3.2
+      YAML
+
+      let(:remote_config_child) { <<~YAML }
+        AllCops:
+          TargetRubyVersion: 3.1
+      YAML
+
+      context 'and that file inherits another' do
+        before do
+          create_file('.rubocop.yml', <<~YAML)
+            inherit_from: "https://www.example.com/rubocop.yml"
+          YAML
+
+          stub_request(:get, 'https://www.example.com/rubocop.yml')
+            .to_return(status: 200, body: remote_config_parent)
+
+          stub_request(:get, 'https://www.example.com/child.yml')
+            .to_return(status: 200, body: remote_config_child)
+        end
+
+        it 'does not output warnings for duplicate keys' do
+          expect { load_file }.not_to output(/overrides the same parameter/).to_stdout
         end
       end
     end
@@ -1905,7 +2062,7 @@ RSpec.describe RuboCop::ConfigLoader do
     end
   end
 
-  describe 'when a unqualified requirement is defined', :isolated_environment do
+  describe 'when an unqualified requirement is defined', :isolated_environment do
     let(:required_file_path) { 'required_file' }
 
     before do

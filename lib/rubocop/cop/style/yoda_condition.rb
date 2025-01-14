@@ -85,6 +85,12 @@ module RuboCop
         NONCOMMUTATIVE_OPERATORS = %i[===].freeze
         PROGRAM_NAMES = %i[$0 $PROGRAM_NAME].freeze
         RESTRICT_ON_SEND = RuboCop::AST::Node::COMPARISON_OPERATORS
+        ENFORCE_YODA_STYLES = %i[
+          require_for_all_comparison_operators require_for_equality_operators_only
+        ].freeze
+        EQUALITY_ONLY_STYLES = %i[
+          forbid_for_equality_operators_only require_for_equality_operators_only
+        ].freeze
 
         # @!method file_constant_equal_program_name?(node)
         def_node_matcher :file_constant_equal_program_name?, <<~PATTERN
@@ -105,29 +111,29 @@ module RuboCop
         private
 
         def enforce_yoda?
-          style == :require_for_all_comparison_operators ||
-            style == :require_for_equality_operators_only
+          ENFORCE_YODA_STYLES.include?(style)
         end
 
         def equality_only?
-          style == :forbid_for_equality_operators_only ||
-            style == :require_for_equality_operators_only
+          EQUALITY_ONLY_STYLES.include?(style)
         end
 
         def yoda_compatible_condition?(node)
           node.comparison_method? && !noncommutative_operator?(node)
         end
 
+        # rubocop:disable Metrics/CyclomaticComplexity
         def valid_yoda?(node)
-          lhs = node.receiver
-          rhs = node.first_argument
+          return true unless (rhs = node.first_argument)
 
+          lhs = node.receiver
           return true if (constant_portion?(lhs) && constant_portion?(rhs)) ||
                          (!constant_portion?(lhs) && !constant_portion?(rhs)) ||
                          interpolation?(lhs)
 
           enforce_yoda? ? constant_portion?(lhs) : constant_portion?(rhs)
         end
+        # rubocop:enable Metrics/CyclomaticComplexity
 
         def message(node)
           format(MSG, source: node.source)
@@ -145,7 +151,7 @@ module RuboCop
         end
 
         def actual_code_range(node)
-          range_between(node.loc.expression.begin_pos, node.loc.expression.end_pos)
+          range_between(node.source_range.begin_pos, node.source_range.end_pos)
         end
 
         def reverse_comparison(operator)

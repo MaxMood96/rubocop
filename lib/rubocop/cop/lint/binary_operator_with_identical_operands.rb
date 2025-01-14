@@ -5,17 +5,16 @@ module RuboCop
     module Lint
       # Checks for places where binary operator has identical operands.
       #
-      # It covers arithmetic operators: `-`, `/`, `%`;
-      # comparison operators: `==`, `===`, `=~`, `>`, `>=`, `<`, `<=`;
+      # It covers comparison operators: `==`, `===`, `=~`, `>`, `>=`, `<`, ``<=``;
       # bitwise operators: `|`, `^`, `&`;
       # boolean operators: `&&`, `||`
-      # and "spaceship" operator - `<=>`.
+      # and "spaceship" operator - ``<=>``.
       #
       # Simple arithmetic operations are allowed by this cop: `+`, `*`, `**`, `<<` and `>>`.
       # Although these can be rewritten in a different way, it should not be necessary to
-      # do so. This does not include operations such as `-` or `/` where the result will
-      # always be the same (`x - x` will always be 0; `x / x` will always be 1), and
-      # thus are legitimate offenses.
+      # do so. Operations such as `-` or `/` where the result will always be the same
+      # (`x - x` will always be 0; `x / x` will always be 1) are offenses, but these
+      # are covered by Lint/NumericOperationWithConstantResult instead.
       #
       # @safety
       #   This cop is unsafe as it does not consider side effects when calling methods
@@ -30,7 +29,6 @@ module RuboCop
       #
       # @example
       #   # bad
-      #   x / x
       #   x.top >= x.top
       #
       #   if a.x != 0 && a.x != 0
@@ -47,19 +45,19 @@ module RuboCop
       #
       class BinaryOperatorWithIdenticalOperands < Base
         MSG = 'Binary operator `%<op>s` has identical operands.'
-        ALLOWED_MATH_OPERATORS = %i[+ * ** << >>].to_set.freeze
+        RESTRICT_ON_SEND = %i[== != === <=> =~ && || > >= < <= | ^].freeze
 
         def on_send(node)
           return unless node.binary_operation?
+          return unless node.receiver == node.first_argument
 
-          lhs, operation, rhs = *node
-          return if ALLOWED_MATH_OPERATORS.include?(node.method_name)
-
-          add_offense(node, message: format(MSG, op: operation)) if lhs == rhs
+          add_offense(node, message: format(MSG, op: node.method_name))
         end
 
         def on_and(node)
-          add_offense(node, message: format(MSG, op: node.operator)) if node.lhs == node.rhs
+          return unless node.lhs == node.rhs
+
+          add_offense(node, message: format(MSG, op: node.operator))
         end
         alias on_or on_and
       end

@@ -25,22 +25,24 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLineAfterGuardClause, :config do
     RUBY
   end
 
-  it 'registers an offense and corrects `next` guard clause not followed by empty line' do
-    expect_offense(<<~RUBY)
-      def foo
-        next unless need_next? # comment
-        ^^^^^^^^^^^^^^^^^^^^^^ Add empty line after guard clause.
-        foobar
-      end
-    RUBY
+  context 'Ruby <= 3.2', :ruby32, unsupported_on: :prism do
+    it 'registers an offense and corrects `next` guard clause not followed by empty line' do
+      expect_offense(<<~RUBY)
+        def foo
+          next unless need_next? # comment
+          ^^^^^^^^^^^^^^^^^^^^^^ Add empty line after guard clause.
+          foobar
+        end
+      RUBY
 
-    expect_correction(<<~RUBY)
-      def foo
-        next unless need_next? # comment
+      expect_correction(<<~RUBY)
+        def foo
+          next unless need_next? # comment
 
-        foobar
-      end
-    RUBY
+          foobar
+        end
+      RUBY
+    end
   end
 
   it 'registers an offense and corrects a guard clause is before `begin`' do
@@ -116,8 +118,7 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLineAfterGuardClause, :config do
   end
 
   it 'registers an offense and corrects a next guard clause not followed by ' \
-     'empty line when guard clause is after heredoc ' \
-     'including string interpolation' do
+     'empty line when guard clause is after heredoc including string interpolation' do
     expect_offense(<<~'RUBY')
       raise(<<-FAIL) unless true
         #{1 + 1}
@@ -327,12 +328,62 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLineAfterGuardClause, :config do
     RUBY
   end
 
+  it 'accepts using guard clause is after `:nocov:` comment' do
+    expect_no_offenses(<<~RUBY)
+      def foo
+        # :nocov:
+        return if condition
+        # :nocov:
+
+        bar
+      end
+    RUBY
+  end
+
   it 'accepts a guard clause inside oneliner block' do
     expect_no_offenses(<<~RUBY)
       def foo
         object.tap { |obj| return another_object if something? }
         foobar
       end
+    RUBY
+  end
+
+  it 'registers a guard clause outside difference line block' do
+    expect_offense(<<~RUBY)
+      return if condition
+      ^^^^^^^^^^^^^^^^^^^ Add empty line after guard clause.
+      foo do
+        bar
+      end
+      baz
+    RUBY
+
+    expect_correction(<<~RUBY)
+      return if condition
+
+      foo do
+        bar
+      end
+      baz
+    RUBY
+  end
+
+  it 'accepts a guard clause outside oneliner block' do
+    expect_no_offenses(<<~RUBY)
+      return if condition; foo do
+        bar
+      end
+      baz
+    RUBY
+  end
+
+  it 'accepts a guard clause outside oneliner numbered block' do
+    expect_no_offenses(<<~RUBY)
+      return if condition; foo do
+        bar(_1)
+      end
+      baz
     RUBY
   end
 
@@ -470,6 +521,30 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLineAfterGuardClause, :config do
     RUBY
   end
 
+  it 'does not register an offense when using `return` before guard condition with heredoc' do
+    expect_no_offenses(<<~RUBY)
+      def foo
+        return true if <<~TEXT.length > bar
+          hi
+        TEXT
+
+        false
+      end
+    RUBY
+  end
+
+  it 'does not register an offense when using `raise` before guard condition with heredoc' do
+    expect_no_offenses(<<~RUBY)
+      def foo
+        raise if <<~TEXT.length > bar
+          hi
+        TEXT
+
+        baz
+      end
+    RUBY
+  end
+
   it 'registers an offense and corrects a guard clause that is a ternary operator' do
     expect_offense(<<~RUBY)
       def foo
@@ -495,15 +570,15 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLineAfterGuardClause, :config do
   it 'registers an offense and corrects a method starting with end_' do
     expect_offense(<<~RUBY)
       def foo
-        next unless need_next?
-        ^^^^^^^^^^^^^^^^^^^^^^ Add empty line after guard clause.
+        return unless need_next?
+        ^^^^^^^^^^^^^^^^^^^^^^^^ Add empty line after guard clause.
         end_this!
       end
     RUBY
 
     expect_correction(<<~RUBY)
       def foo
-        next unless need_next?
+        return unless need_next?
 
         end_this!
       end
@@ -513,17 +588,17 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLineAfterGuardClause, :config do
   it 'registers an offense and corrects only the last guard clause' do
     expect_offense(<<~RUBY)
       def foo
-        next if foo?
-        next if bar?
-        ^^^^^^^^^^^^ Add empty line after guard clause.
+        return if foo?
+        return if bar?
+        ^^^^^^^^^^^^^^ Add empty line after guard clause.
         foobar
       end
     RUBY
 
     expect_correction(<<~RUBY)
       def foo
-        next if foo?
-        next if bar?
+        return if foo?
+        return if bar?
 
         foobar
       end

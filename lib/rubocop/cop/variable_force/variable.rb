@@ -29,7 +29,11 @@ module RuboCop
         end
 
         def assign(node)
-          @assignments << Assignment.new(node, self)
+          assignment = Assignment.new(node, self)
+
+          @assignments.last&.reassigned! unless captured_by_block?
+
+          @assignments << assignment
         end
 
         def referenced?
@@ -52,7 +56,7 @@ module RuboCop
             # if/unless keyword. A preceding assignment is needed to put the
             # variable in scope. For this reason we skip to the next assignment
             # here.
-            next if in_modifier_if?(assignment)
+            next if in_modifier_conditional?(assignment)
 
             break if !assignment.branch || assignment.branch == reference.branch
 
@@ -63,10 +67,12 @@ module RuboCop
         end
         # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
-        def in_modifier_if?(assignment)
+        def in_modifier_conditional?(assignment)
           parent = assignment.node.parent
           parent = parent.parent if parent&.begin_type?
-          parent&.if_type? && parent&.modifier_form?
+          return false if parent.nil?
+
+          (parent.if_type? || parent.while_type? || parent.until_type?) && parent.modifier_form?
         end
 
         def capture_with_block!

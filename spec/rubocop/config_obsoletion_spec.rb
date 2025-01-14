@@ -391,11 +391,50 @@ RSpec.describe RuboCop::ConfigObsoletion do
         OUTPUT
       end
 
-      it 'prints a error message' do
+      it 'prints an error message' do
         config_obsoletion.reject_obsolete!
         raise 'Expected a RuboCop::ValidationError'
       rescue RuboCop::ValidationError => e
         expect(e.message).to eq(expected_message)
+      end
+    end
+
+    context 'when the configuration includes deprecated parameters for the TargetRubyVersion' do
+      let(:hash) do
+        {
+          'AllCops' => { 'TargetRubyVersion' => target_ruby_version },
+          **cop_config
+        }
+      end
+      let(:warning_message) { config_obsoletion.warnings.join("\n") }
+
+      context 'with Style/ArgumentsForwarding AllowOnlyRestArgument' do
+        let(:cop_config) do
+          { 'Style/ArgumentsForwarding' => { 'AllowOnlyRestArgument' => false } }
+        end
+
+        context 'with TargetRubyVersion 3.2' do
+          let(:target_ruby_version) { 3.2 }
+
+          it 'prints a warning message' do
+            expected_message = <<~OUTPUT.chomp
+              obsolete parameter `AllowOnlyRestArgument` (for `Style/ArgumentsForwarding`) found in example/.rubocop.yml
+              `AllowOnlyRestArgument` has no effect with TargetRubyVersion >= 3.2.
+            OUTPUT
+
+            expect { config_obsoletion.reject_obsolete! }.not_to raise_error
+            expect(warning_message).to eq(expected_message)
+          end
+        end
+
+        context 'with TargetRubyVersion 3.1' do
+          let(:target_ruby_version) { 3.1 }
+
+          it 'does not print a warning message' do
+            expect { config_obsoletion.reject_obsolete! }.not_to raise_error
+            expect(warning_message).to eq('')
+          end
+        end
       end
     end
 
@@ -505,7 +544,7 @@ RSpec.describe RuboCop::ConfigObsoletion do
         }
       end
 
-      let(:file1) do
+      let(:file_with_renamed_config) do
         create_file('obsoletions1.yml', <<~YAML)
           renamed:
             Foo/Bar: Foo/Baz
@@ -513,7 +552,7 @@ RSpec.describe RuboCop::ConfigObsoletion do
         YAML
       end
 
-      let(:file2) do
+      let(:file_with_removed_and_split_config) do
         create_file('obsoletions2.yml', <<~YAML)
           removed:
             Legacy/Test:
@@ -525,6 +564,12 @@ RSpec.describe RuboCop::ConfigObsoletion do
               alternatives:
                 - Style/One
                 - Style/Two
+        YAML
+      end
+
+      let(:file_with_comments_only) do
+        create_file('obsoletions3.yml', <<~YAML)
+          # Placeholder for eventual obsoletions, so we can hook up the file regardless
         YAML
       end
 
@@ -544,8 +589,9 @@ RSpec.describe RuboCop::ConfigObsoletion do
       end
 
       it 'includes obsoletions from all sources' do
-        described_class.files << file1
-        described_class.files << file2
+        described_class.files << file_with_renamed_config
+        described_class.files << file_with_removed_and_split_config
+        described_class.files << file_with_comments_only
 
         begin
           config_obsoletion.reject_obsolete!

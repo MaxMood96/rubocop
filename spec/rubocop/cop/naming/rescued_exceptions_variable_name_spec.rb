@@ -85,6 +85,40 @@ RSpec.describe RuboCop::Cop::Naming::RescuedExceptionsVariableName, :config do
           RUBY
         end
 
+        it 'registers an offense when using `error` for an explicit hash value' do
+          expect_offense(<<~RUBY)
+            begin
+            rescue => error
+                      ^^^^^ Use `e` instead of `error`.
+              do_something(error: error)
+            end
+          RUBY
+
+          expect_correction(<<~RUBY)
+            begin
+            rescue => e
+              do_something(error: e)
+            end
+          RUBY
+        end
+
+        it 'registers an offense when using `error` for an omitted hash value', :ruby31 do
+          expect_offense(<<~RUBY)
+            begin
+            rescue => error
+                      ^^^^^ Use `e` instead of `error`.
+              do_something(error:)
+            end
+          RUBY
+
+          expect_correction(<<~RUBY)
+            begin
+            rescue => e
+              do_something(error: e)
+            end
+          RUBY
+        end
+
         it 'does not register an offense when using `e`' do
           expect_no_offenses(<<~RUBY)
             begin
@@ -452,6 +486,39 @@ RSpec.describe RuboCop::Cop::Naming::RescuedExceptionsVariableName, :config do
             rescue StandardError => e2
               log(e, e2)
             end
+          end
+        RUBY
+      end
+    end
+
+    context 'when the variable is referenced after `rescue` statement' do
+      it 'handles it' do
+        expect_offense(<<~RUBY)
+          begin
+            something
+          rescue StandardError => e1
+                                  ^^ Use `e` instead of `e1`.
+          end
+          foo(e1)
+        RUBY
+
+        expect_correction(<<~RUBY)
+          begin
+            something
+          rescue StandardError => e
+          end
+          foo(e)
+        RUBY
+      end
+    end
+
+    context 'when exception is assigned with writer method' do
+      it 'does not register an offense' do
+        expect_no_offenses(<<~RUBY)
+          begin
+            something
+          rescue => storage.exception
+            # do something
           end
         RUBY
       end

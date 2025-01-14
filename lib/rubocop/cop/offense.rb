@@ -43,11 +43,10 @@ module RuboCop
       # @!attribute [r] cop_name
       #
       # @return [String]
-      #   a cop class name without department.
-      #   i.e. type of the violation.
+      #   the cop name as a String for which this offense is for.
       #
       # @example
-      #   'LineLength'
+      #   'Layout/LineLength'
       attr_reader :cop_name
 
       # @api private
@@ -97,8 +96,8 @@ module RuboCop
       # @!attribute [r] correctable?
       #
       # @return [Boolean]
-      #   whether this offense can be automatically corrected via
-      #   autocorrect or a todo.
+      #   whether this offense can be automatically corrected via autocorrect.
+      #   This includes todo comments, for example when requested with `--disable-uncorrectable`.
       def correctable?
         @status != :unsupported
       end

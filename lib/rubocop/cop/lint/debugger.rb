@@ -29,6 +29,11 @@ module RuboCop
       #       MyDebugger.debug_this
       # ----
       #
+      # Some gems also ship files that will start a debugging session when required,
+      # for example `require 'debug/start'` from `ruby/debug`. These requires can
+      # be configured through `DebuggerRequires`. It has the same structure as
+      # `DebuggerMethods`, which you can read about above.
+      #
       # @example
       #
       #   # bad (ok during development)
@@ -39,8 +44,6 @@ module RuboCop
       #     do_something
       #   end
       #
-      # @example
-      #
       #   # bad (ok during development)
       #
       #   # using byebug
@@ -48,8 +51,6 @@ module RuboCop
       #     byebug
       #     do_something
       #   end
-      #
-      # @example
       #
       #   # good
       #
@@ -64,16 +65,20 @@ module RuboCop
       #   def some_method
       #     my_debugger
       #   end
+      #
+      # @example DebuggerRequires: [my_debugger/start]
+      #
+      #   # bad (ok during development)
+      #
+      #   require 'my_debugger/start'
       class Debugger < Base
         MSG = 'Remove debugger entry point `%<source>s`.'
+        BLOCK_TYPES = %i[block numblock kwbegin].freeze
 
         def on_send(node)
-          return unless debugger_method?(node)
+          return if assumed_usage_context?(node)
 
-          # Basically, debugger methods are not used as a method argument without arguments.
-          return if node.arguments.empty? && node.each_ancestor(:send, :csend).any?
-
-          add_offense(node)
+          add_offense(node) if debugger_method?(node) || debugger_require?(node)
         end
 
         private
@@ -89,10 +94,34 @@ module RuboCop
           end
         end
 
+        def debugger_requires
+          @debugger_requires ||= begin
+            config = cop_config.fetch('DebuggerRequires', [])
+            config.is_a?(Array) ? config : config.values.flatten
+          end
+        end
+
         def debugger_method?(send_node)
-          return if send_node.parent&.send_type? && send_node.parent.receiver == send_node
+          return false if send_node.parent&.send_type? && send_node.parent.receiver == send_node
 
           debugger_methods.include?(chained_method_name(send_node))
+        end
+
+        def debugger_require?(send_node)
+          return false unless send_node.method?(:require) && send_node.arguments.one?
+          return false unless (argument = send_node.first_argument).str_type?
+
+          debugger_requires.include?(argument.value)
+        end
+
+        def assumed_usage_context?(node)
+          # Basically, debugger methods are not used as a method argument without arguments.
+          return false unless node.arguments.empty? && node.each_ancestor(:send, :csend).any?
+          return true if assumed_argument?(node)
+
+          node.each_ancestor.none? do |ancestor|
+            BLOCK_TYPES.include?(ancestor.type) || ancestor.lambda_or_proc?
+          end
         end
 
         def chained_method_name(send_node)
@@ -104,6 +133,12 @@ module RuboCop
             receiver = receiver.receiver
           end
           chained_method_name
+        end
+
+        def assumed_argument?(node)
+          parent = node.parent
+
+          parent.call_type? || parent.literal? || parent.pair_type?
         end
       end
     end

@@ -55,6 +55,25 @@ module RuboCop
       #   foo || raise('exception') if something
       #   ok
       #
+      #   # bad
+      #   define_method(:test) do
+      #     if something
+      #       work
+      #     end
+      #   end
+      #
+      #   # good
+      #   define_method(:test) do
+      #     return unless something
+      #
+      #     work
+      #   end
+      #
+      #   # also good
+      #   define_method(:test) do
+      #     work if something
+      #   end
+      #
       # @example AllowConsecutiveConditionals: false (default)
       #   # bad
       #   def test
@@ -109,6 +128,13 @@ module RuboCop
           check_ending_body(body)
         end
         alias on_defs on_def
+
+        def on_block(node)
+          return unless node.method?(:define_method) || node.method?(:define_singleton_method)
+
+          on_def(node)
+        end
+        alias on_numblock on_block
 
         def on_if(node)
           return if accepted_form?(node)
@@ -182,10 +208,12 @@ module RuboCop
 
         # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def autocorrect(corrector, node, condition, replacement, guard)
-          corrector.replace(node.loc.keyword.join(condition.loc.expression), replacement)
+          corrector.replace(node.loc.keyword.join(condition.source_range), replacement)
 
           if_branch = node.if_branch
           else_branch = node.else_branch
+
+          corrector.replace(node.loc.begin, "\n") if node.loc.begin&.is?('then')
 
           if if_branch&.send_type? && heredoc?(if_branch.last_argument)
             autocorrect_heredoc_argument(corrector, node, if_branch, else_branch, guard)
@@ -206,11 +234,11 @@ module RuboCop
         end
 
         def autocorrect_heredoc_argument(corrector, node, heredoc_branch, leave_branch, guard)
+          remove_whole_lines(corrector, node.loc.end)
           return unless node.else?
 
           remove_whole_lines(corrector, leave_branch.source_range)
           remove_whole_lines(corrector, node.loc.else)
-          remove_whole_lines(corrector, node.loc.end)
           remove_whole_lines(corrector, range_of_branch_to_remove(node, guard))
           corrector.insert_after(
             heredoc_branch.last_argument.loc.heredoc_end, "\n#{leave_branch.source}"
@@ -236,7 +264,7 @@ module RuboCop
 
         def and_or_guard_clause?(guard_clause)
           parent = guard_clause.parent
-          parent.and_type? || parent.or_type?
+          parent.operator_keyword?
         end
 
         def too_long_for_single_line?(node, example)
@@ -249,17 +277,32 @@ module RuboCop
         end
 
         def trivial?(node)
+          return false unless node.if_branch
+
           node.branches.one? && !node.if_branch.if_type? && !node.if_branch.begin_type?
         end
 
         def accepted_if?(node, ending)
-          return true if node.modifier_form? || node.ternary? || node.elsif_conditional?
+          return true if node.modifier_form? || node.ternary? || node.elsif_conditional? ||
+                         assigned_lvar_used_in_if_branch?(node)
 
           if ending
             node.else?
           else
             !node.else? || node.elsif?
           end
+        end
+
+        def assigned_lvar_used_in_if_branch?(node)
+          return false unless (if_branch = node.if_branch)
+
+          assigned_lvars_in_condition = node.condition.each_descendant(:lvasgn).map do |lvasgn|
+            lvar_name, = *lvasgn
+            lvar_name.to_s
+          end
+          used_lvars_in_branch = if_branch.each_descendant(:lvar).map(&:source) || []
+
+          (assigned_lvars_in_condition & used_lvars_in_branch).any?
         end
 
         def remove_whole_lines(corrector, range)

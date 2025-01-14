@@ -15,43 +15,35 @@ RSpec.describe RuboCop::RakeTask do
     it 'creates a rubocop task and a rubocop auto_correct task' do
       described_class.new
 
-      expect(Rake::Task.task_defined?(:rubocop)).to be true
-      expect(Rake::Task.task_defined?('rubocop:auto_correct')).to be true
+      expect(Rake::Task).to be_task_defined(:rubocop)
+      expect(Rake::Task).to be_task_defined('rubocop:auto_correct')
     end
 
     it 'creates a named task and a named auto_correct task' do
       described_class.new(:lint_lib)
 
-      expect(Rake::Task.task_defined?(:lint_lib)).to be true
-      expect(Rake::Task.task_defined?('lint_lib:auto_correct')).to be true
+      expect(Rake::Task).to be_task_defined(:lint_lib)
+      expect(Rake::Task).to be_task_defined('lint_lib:auto_correct')
     end
     # rubocop:enable Naming/InclusiveLanguage
 
     it 'creates a rubocop task and a rubocop autocorrect task' do
       described_class.new
 
-      expect(Rake::Task.task_defined?(:rubocop)).to be true
-      expect(Rake::Task.task_defined?('rubocop:autocorrect')).to be true
+      expect(Rake::Task).to be_task_defined(:rubocop)
+      expect(Rake::Task).to be_task_defined('rubocop:autocorrect')
     end
 
     it 'creates a named task and a named autocorrect task' do
       described_class.new(:lint_lib)
 
-      expect(Rake::Task.task_defined?(:lint_lib)).to be true
-      expect(Rake::Task.task_defined?('lint_lib:autocorrect')).to be true
+      expect(Rake::Task).to be_task_defined(:lint_lib)
+      expect(Rake::Task).to be_task_defined('lint_lib:autocorrect')
     end
   end
 
   describe 'running tasks' do
-    before do
-      $stdout = StringIO.new
-      $stderr = StringIO.new
-    end
-
-    after do
-      $stdout = STDOUT
-      $stderr = STDERR
-    end
+    include_context 'mock console output'
 
     it 'runs with default options' do
       described_class.new
@@ -98,7 +90,7 @@ RSpec.describe RuboCop::RakeTask do
       Rake::Task['rubocop'].execute
     end
 
-    it 'will not error when result is not 0 and fail_on_error is false' do
+    it 'does not error when result is not 0 and fail_on_error is false' do
       described_class.new { |task| task.fail_on_error = false }
 
       cli = instance_double(RuboCop::CLI, run: 1)
@@ -131,8 +123,8 @@ RSpec.describe RuboCop::RakeTask do
       expect($stdout.string).to eq(<<~RESULT)
         Running RuboCop...
 
-        1  Style/FrozenStringLiteralComment
-        1  Style/SpecialGlobalVars
+        1  Style/FrozenStringLiteralComment [Unsafe Correctable]
+        1  Style/SpecialGlobalVars [Unsafe Correctable]
         --
         2  Total in 1 files
 
@@ -165,7 +157,7 @@ RSpec.describe RuboCop::RakeTask do
         Rake::Task['rubocop:autocorrect_all'].execute
       end
 
-      it 'runs with with the options that were passed to its parent task' do
+      it 'runs with the options that were passed to its parent task' do
         described_class.new do |task|
           task.patterns = ['lib/**/*.rb']
           task.formatters = ['files']

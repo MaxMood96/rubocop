@@ -53,6 +53,12 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
       expect_no_offenses('if cond then run end')
     end
 
+    it 'does not register an offense when using if/then/else/end with multiple expressions in the `then` body' do
+      expect_no_offenses(<<~RUBY)
+        if cond then x; y else z end
+      RUBY
+    end
+
     it 'registers and corrects an offense with ternary operator for unless/then/else/end' do
       expect_offense(<<~RUBY)
         unless cond then run else dont end
@@ -61,6 +67,33 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
 
       expect_correction(<<~RUBY)
         cond ? dont : run
+      RUBY
+    end
+
+    it 'registers and corrects an offense with ternary operator for nested if/then/else/end' do
+      expect_offense(<<~RUBY)
+        if cond then foo else if cond2; bar else baz end; end
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^ #{if_offense_message}
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ #{if_offense_message}
+      RUBY
+
+      expect_correction(<<~RUBY)
+        cond ? foo : (if cond2; bar else baz end)
+      RUBY
+    end
+
+    it 'registers and corrects an offense when the else branch of a ternary operator has multiple expressions' do
+      expect_offense(<<~RUBY)
+        if cond; foo; else bar; baz; end
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ #{if_offense_message}
+      RUBY
+
+      expect_correction(<<~RUBY)
+        if cond
+          foo
+        else
+          bar; baz
+        end
       RUBY
     end
 
@@ -103,6 +136,7 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'puts 1'
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'defined? :A'
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'yield a'
+
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'super b'
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'not a'
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'a and b'
@@ -146,9 +180,9 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
       RUBY
     end
 
-    shared_examples 'if/then/else/end with keyword' do |keyword|
+    shared_examples 'if/then/else/end with keyword' do |keyword, options|
       it 'registers and corrects an offense with ternary operator when one of the branches of ' \
-         "if/then/else/end contains `#{keyword}` keyword" do
+         "if/then/else/end contains `#{keyword}` keyword", *options do
         expect_offense(<<~RUBY, keyword: keyword)
           if true then %{keyword} else 7 end
           ^^^^^^^^^^^^^^{keyword}^^^^^^^^^^^ #{if_offense_message}
@@ -160,8 +194,12 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
       end
     end
 
-    it_behaves_like 'if/then/else/end with keyword', 'retry'
-    it_behaves_like 'if/then/else/end with keyword', 'break'
+    context 'Ruby <= 3.2', :ruby32, unsupported_on: :prism do
+      it_behaves_like 'if/then/else/end with keyword', 'retry'
+    end
+
+    it_behaves_like 'if/then/else/end with keyword', 'break', [:ruby32, { unsupported_on: :prism }]
+
     it_behaves_like 'if/then/else/end with keyword', 'self'
     it_behaves_like 'if/then/else/end with keyword', 'raise'
 
@@ -288,6 +326,22 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
       RUBY
     end
 
+    it 'registers and corrects an offense with ternary operator for nested if/then/else/end' do
+      expect_offense(<<~RUBY)
+        if cond then foo else if cond2; bar else baz end; end
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^ #{if_offense_message}
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ #{if_offense_message}
+      RUBY
+
+      expect_correction(<<~RUBY)
+        if cond
+          foo
+        else
+          if cond2; bar else baz end
+        end
+      RUBY
+    end
+
     it 'does not register an offense for unless/then/else/end with empty else' do
       expect_no_offenses('unless cond then run else end')
     end
@@ -334,7 +388,9 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
 
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'puts 1'
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'defined? :A'
+
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'yield a'
+
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'super b'
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'not a'
     it_behaves_like 'if/then/else/end with constructs changing precedence', 'a and b'
@@ -390,9 +446,9 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
       RUBY
     end
 
-    shared_examples 'if/then/else/end with keyword' do |keyword|
+    shared_examples 'if/then/else/end with keyword' do |keyword, options|
       it 'registers and corrects an offense with multi-line construct when one of the branches ' \
-         "of if/then/else/end contains `#{keyword}` keyword" do
+         "of if/then/else/end contains `#{keyword}` keyword", *options do
         expect_offense(<<~RUBY, keyword: keyword)
           if true then %{keyword} else 7 end
           ^^^^^^^^^^^^^^{keyword}^^^^^^^^^^^ #{if_offense_message}
@@ -408,8 +464,12 @@ RSpec.describe RuboCop::Cop::Style::OneLineConditional, :config do
       end
     end
 
-    it_behaves_like 'if/then/else/end with keyword', 'retry'
-    it_behaves_like 'if/then/else/end with keyword', 'break'
+    context 'Ruby <= 3.2', :ruby32, unsupported_on: :prism do
+      it_behaves_like 'if/then/else/end with keyword', 'retry'
+    end
+
+    it_behaves_like 'if/then/else/end with keyword', 'break', [:ruby32, { unsupported_on: :prism }]
+
     it_behaves_like 'if/then/else/end with keyword', 'self'
     it_behaves_like 'if/then/else/end with keyword', 'raise'
 

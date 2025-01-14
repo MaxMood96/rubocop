@@ -8,14 +8,14 @@ RSpec.describe RuboCop::Cop::Naming::ConstantName, :config do
     RUBY
   end
 
-  it 'registers an offense for camel case in const namewhen using frozen range assignment' do
+  it 'registers an offense for camel case in const name when using frozen range assignment' do
     expect_offense(<<~RUBY)
       TopCase = (1..5).freeze
       ^^^^^^^ Use SCREAMING_SNAKE_CASE for constants.
     RUBY
   end
 
-  it 'registers an offense for camel case in const namewhen using frozen object assignment' do
+  it 'registers an offense for camel case in const name when using frozen object assignment' do
     expect_offense(<<~RUBY)
       TopCase = 5.freeze
       ^^^^^^^ Use SCREAMING_SNAKE_CASE for constants.
@@ -111,6 +111,15 @@ RSpec.describe RuboCop::Cop::Naming::ConstantName, :config do
         ^^^^^^^^^^^^ Use SCREAMING_SNAKE_CASE for constants.
       a::Bar_foo = 10
          ^^^^^^^ Use SCREAMING_SNAKE_CASE for constants.
+    RUBY
+  end
+
+  it 'does not register an offense when assigning a constant from an empty branch of `else`' do
+    expect_no_offenses(<<~RUBY)
+      CONST = if condition
+        foo
+      else
+      end
     RUBY
   end
 

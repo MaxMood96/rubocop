@@ -118,6 +118,49 @@ RSpec.describe RuboCop::Cop::Style::RedundantReturn, :config do
     RUBY
   end
 
+  it 'reports an offense for lambda ending with return' do
+    expect_offense(<<~RUBY)
+      lambda do
+        some_preceding_statements
+        return something
+        ^^^^^^ Redundant `return` detected.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      lambda do
+        some_preceding_statements
+        something
+      end
+    RUBY
+  end
+
+  it 'reports an offense for -> ending with return' do
+    expect_offense(<<~RUBY)
+      -> do
+        some_preceding_statements
+        return something
+        ^^^^^^ Redundant `return` detected.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      -> do
+        some_preceding_statements
+        something
+      end
+    RUBY
+  end
+
+  it 'does not register an offense for proc ending with return' do
+    expect_no_offenses(<<~RUBY)
+      proc do
+        some_preceding_statements
+        return something
+      end
+    RUBY
+  end
+
   it 'reports an offense for def ending with return with splat argument' do
     expect_offense(<<~RUBY)
       def func
@@ -152,10 +195,25 @@ RSpec.describe RuboCop::Cop::Style::RedundantReturn, :config do
     RUBY
   end
 
-  it 'accepts return in a non-final position' do
-    expect_no_offenses(<<~RUBY)
+  it 'registers an offense when returning value with guard clause and `return` is used' do
+    expect_offense(<<~RUBY)
       def func
         return something if something_else
+        ^^^^^^ Redundant `return` detected.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def func
+        something if something_else
+      end
+    RUBY
+  end
+
+  it 'does not register an offense when returning value with guard clause and `return` is not used' do
+    expect_no_offenses(<<~RUBY)
+      def func
+        something if something_else
       end
     RUBY
   end
@@ -542,5 +600,59 @@ RSpec.describe RuboCop::Cop::Style::RedundantReturn, :config do
         end
       RUBY
     end
+  end
+
+  context 'when return is inside an in-branch' do
+    it 'registers an offense and autocorrects' do
+      expect_offense(<<~RUBY)
+        def func
+          some_preceding_statements
+          case x
+          in y then return 1
+                    ^^^^^^ Redundant `return` detected.
+          in z then return 2
+                    ^^^^^^ Redundant `return` detected.
+          in q
+          else
+            return 3
+            ^^^^^^ Redundant `return` detected.
+          end
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        def func
+          some_preceding_statements
+          case x
+          in y then 1
+          in z then 2
+          in q
+          else
+            3
+          end
+        end
+      RUBY
+    end
+  end
+
+  context 'when case match nodes are empty' do
+    it 'accepts empty in nodes' do
+      expect_no_offenses(<<~RUBY)
+        def func
+          case x
+          in y then 1
+          in z # do nothing
+          else
+            3
+          end
+        end
+      RUBY
+    end
+  end
+
+  it 'does not register an offense when using `lambda.call(block)`' do
+    expect_no_offenses(<<~RUBY)
+      lambda.call(block)
+    RUBY
   end
 end

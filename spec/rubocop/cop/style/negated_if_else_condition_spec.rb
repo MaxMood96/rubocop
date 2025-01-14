@@ -229,6 +229,16 @@ RSpec.describe RuboCop::Cop::Style::NegatedIfElseCondition, :config do
     RUBY
   end
 
+  it 'does not crash when using `()` as a condition' do
+    expect_no_offenses(<<~RUBY)
+      if ()
+        foo
+      else
+        bar
+      end
+    RUBY
+  end
+
   it 'moves comments to correct branches during autocorrect' do
     expect_offense(<<~RUBY)
       if !condition.nil?
@@ -415,6 +425,16 @@ RSpec.describe RuboCop::Cop::Style::NegatedIfElseCondition, :config do
     expect_no_offenses(<<~RUBY)
       if !x
         do_something
+      end
+    RUBY
+  end
+
+  it 'does not register an offense for != with multiple arguments' do
+    expect_no_offenses(<<~RUBY)
+      if foo.!=(bar, baz)
+        do_a
+      else
+        do_c
       end
     RUBY
   end

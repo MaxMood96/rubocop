@@ -67,16 +67,30 @@ module RuboCop
 
         MSG = 'Avoid `%<keyword>s` branches without a body.'
 
+        # rubocop:disable Metrics/AbcSize
         def on_if(node)
           return if node.body || same_line?(node.loc.begin, node.loc.end)
           return if cop_config['AllowComments'] && contains_comments?(node)
 
-          add_offense(node, message: format(MSG, keyword: node.keyword)) do |corrector|
+          range = offense_range(node)
+
+          add_offense(range, message: format(MSG, keyword: node.keyword)) do |corrector|
+            next if node.parent&.call_type?
+
             autocorrect(corrector, node)
           end
         end
+        # rubocop:enable Metrics/AbcSize
 
         private
+
+        def offense_range(node)
+          if node.loc.else
+            node.source_range.begin.join(node.loc.else.begin)
+          else
+            node.source_range
+          end
+        end
 
         def autocorrect(corrector, node)
           remove_comments(corrector, node)
@@ -86,23 +100,32 @@ module RuboCop
 
         def remove_comments(corrector, node)
           comments_in_range(node).each do |comment|
-            range = range_by_whole_lines(comment.loc.expression, include_final_newline: true)
+            range = range_by_whole_lines(comment.source_range, include_final_newline: true)
             corrector.remove(range)
           end
         end
 
+        # rubocop:disable Metrics/AbcSize
         def remove_empty_branch(corrector, node)
-          if empty_if_branch?(node) && else_branch?(node)
-            corrector.remove(branch_range(node))
-          else
-            corrector.remove(deletion_range(branch_range(node)))
-          end
+          range = if empty_if_branch?(node) && else_branch?(node)
+                    branch_range(node)
+                  elsif same_line?(node, else_kw_loc = node.loc.else)
+                    node.source_range.begin.join(else_kw_loc.begin)
+                  elsif node.parent&.loc.respond_to?(:end) &&
+                        same_line?(node, end_loc = node.parent.loc.end)
+                    node.source_range.begin.join(end_loc.begin)
+                  else
+                    deletion_range(branch_range(node))
+                  end
+
+          corrector.remove(range)
         end
+        # rubocop:enable Metrics/AbcSize
 
         def correct_other_branches(corrector, node)
           return unless require_other_branches_correction?(node)
 
-          if node.else_branch&.if_type?
+          if node.else_branch&.if_type? && !node.else_branch.modifier_form?
             # Replace an orphaned `elsif` with `if`
             corrector.replace(node.else_branch.loc.keyword, 'if')
           else
@@ -141,10 +164,10 @@ module RuboCop
           if empty_if_branch?(node) && else_branch?(node)
             node.source_range.with(end_pos: node.loc.else.begin_pos)
           elsif node.loc.else
-            node.source_range.with(end_pos: node.condition.loc.expression.end_pos)
+            node.source_range.with(end_pos: node.condition.source_range.end_pos)
           elsif all_branches_body_missing?(node)
             if_node = node.ancestors.detect(&:if?)
-            node.source_range.with(end_pos: if_node.loc.end.end_pos)
+            node.source_range.join(if_node.loc.end.end)
           else
             node.source_range
           end

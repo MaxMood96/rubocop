@@ -9,15 +9,17 @@ module RuboCop
       # The cop can be configured to ignore blocks passed to certain methods.
       #
       # You can set constructs you want to fold with `CountAsOne`.
-      # Available are: 'array', 'hash', 'heredoc', and 'method_call'. Each construct
-      # will be counted as one line regardless of its actual size.
       #
+      # Available are: 'array', 'hash', 'heredoc', and 'method_call'.
+      # Each construct will be counted as one line regardless of its actual size.
+      #
+      # NOTE: This cop does not apply for `Struct` definitions.
       #
       # NOTE: The `ExcludedMethods` configuration is deprecated and only kept
       # for backwards compatibility. Please use `AllowedMethods` and `AllowedPatterns`
       # instead. By default, there are no methods to allowed.
       #
-      # @example CountAsOne: ['array', 'heredoc', 'method_call']
+      # @example CountAsOne: ['array', 'hash', 'heredoc', 'method_call']
       #
       #   something do
       #     array = [         # +1
@@ -25,7 +27,7 @@ module RuboCop
       #       2
       #     ]
       #
-      #     hash = {          # +3
+      #     hash = {          # +1
       #       key: 'value'
       #     }
       #
@@ -38,9 +40,8 @@ module RuboCop
       #       1,
       #       2
       #     )
-      #   end                 # 6 points
+      #   end                 # 4 points
       #
-      # NOTE: This cop does not apply for `Struct` definitions.
       class BlockLength < Base
         include CodeLength
         include AllowedMethods

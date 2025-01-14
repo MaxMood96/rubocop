@@ -73,8 +73,28 @@ RSpec.describe RuboCop::Cop::Style::IfUnlessModifier, :config do
         end
       end
 
+      context 'when using multiple `if` modifier in the long one line' do
+        it 'registers an offense' do
+          expect_offense(<<~RUBY)
+            def f
+              return value if items.filter_map { |item| item.do_something if item.something? }
+                                                                          ^^ Modifier form of `if` makes the line too long.
+                           ^^ Modifier form of `if` makes the line too long.
+            end
+          RUBY
+
+          expect_correction(<<~RUBY)
+            def f
+              if items.filter_map { |item| item.do_something if item.something? }
+                return value
+              end
+            end
+          RUBY
+        end
+      end
+
       context 'when using a method with heredoc argument' do
-        it 'accepts' do
+        it 'registers an offense' do
           expect_offense(<<~RUBY)
             fooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo(<<~EOS) if condition
                                                                                  ^^ Modifier form of `if` makes the line too long.
@@ -103,6 +123,20 @@ RSpec.describe RuboCop::Cop::Style::IfUnlessModifier, :config do
             if condition
               variable = foooooooooooooooooooooooooooooooooooooooooooooooooooooooo
             end
+          RUBY
+        end
+      end
+
+      context 'when the line is too long due to long comment with modifier' do
+        it 'registers an offense' do
+          expect_offense(<<~RUBY)
+            some_statement if some_quite_long_condition # The condition might have been long, but this comment is longer. In fact, it is too long for RuboCop
+                           ^^ Modifier form of `if` makes the line too long.
+          RUBY
+
+          expect_correction(<<~RUBY)
+            # The condition might have been long, but this comment is longer. In fact, it is too long for RuboCop
+            some_statement if some_quite_long_condition
           RUBY
         end
       end
@@ -136,9 +170,8 @@ RSpec.describe RuboCop::Cop::Style::IfUnlessModifier, :config do
 
             expect_correction(<<~RUBY)
               def f
-                if condition
-                  #{body}
-                end #{comment}
+                #{comment}
+                #{body} if condition
               end
             RUBY
           end
@@ -349,6 +382,50 @@ RSpec.describe RuboCop::Cop::Style::IfUnlessModifier, :config do
     RUBY
   end
 
+  shared_examples 'one-line pattern matching' do
+    it 'does not register an offense when using match var in body' do
+      expect_no_offenses(<<~RUBY)
+        if [42] in [x]
+          x
+        end
+      RUBY
+    end
+
+    it 'does not register an offense when using some match var in body' do
+      expect_no_offenses(<<~RUBY)
+        if { x: 1, y: 2 } in { x:, y: }
+          a && y
+        end
+      RUBY
+    end
+
+    it 'does not register an offense when not using match var in body' do
+      expect_no_offenses(<<~RUBY)
+        if [42] in [x]
+          y
+        end
+      RUBY
+    end
+
+    it 'does not register an offense when not using any match var in body' do
+      expect_no_offenses(<<~RUBY)
+        if { x: 1, y: 2 } in { x:, y: }
+          a && b
+        end
+      RUBY
+    end
+  end
+
+  # The node type for one-line `in` pattern matching in Ruby 2.7 is `match_pattern`.
+  context 'using `match_pattern` as a one-line pattern matching', :ruby27 do
+    include_examples 'one-line pattern matching'
+  end
+
+  # The node type for one-line `in` pattern matching in Ruby 3.0 is `match_pattern_p`.
+  context 'using `match_pattern_p` as a one-line pattern matching', :ruby30 do
+    include_examples 'one-line pattern matching'
+  end
+
   context 'multiline `if` that fits on one line and using hash value omission syntax', :ruby31 do
     it 'registers an offense' do
       expect_offense(<<~RUBY)
@@ -367,6 +444,111 @@ RSpec.describe RuboCop::Cop::Style::IfUnlessModifier, :config do
         obj.do_something(foo:) if condition
 
         obj&.do_something(foo:) if condition
+      RUBY
+    end
+  end
+
+  context 'multiline `if` that fits on one line and using dot method call with hash value omission syntax', :ruby31 do
+    it 'corrects it to normal form1' do
+      expect_offense(<<~RUBY)
+        if condition
+        ^^ Favor modifier `if` usage when having a single-line body. Another good alternative is the usage of control flow `&&`/`||`.
+          obj.(attr:)
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        obj.(attr:) if condition
+      RUBY
+    end
+  end
+
+  context 'multiline `if` that fits on one line and using safe navigation dot method call with hash value omission syntax', :ruby31 do
+    it 'corrects it to normal form1' do
+      expect_offense(<<~RUBY)
+        if condition
+        ^^ Favor modifier `if` usage when having a single-line body. Another good alternative is the usage of control flow `&&`/`||`.
+          obj&.(attr:)
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        obj&.(attr:) if condition
+      RUBY
+    end
+  end
+
+  context 'using `defined?` in the condition' do
+    it 'registers for argument value is defined' do
+      expect_offense(<<~RUBY)
+        value = :custom
+
+        unless defined?(value)
+        ^^^^^^ Favor modifier `unless` usage when having a single-line body. Another good alternative is the usage of control flow `&&`/`||`.
+          value = :default
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        value = :custom
+
+        value = :default unless defined?(value)
+      RUBY
+    end
+
+    it 'registers for argument value is `yield`' do
+      expect_offense(<<~RUBY)
+        unless defined?(yield)
+        ^^^^^^ Favor modifier `unless` usage when having a single-line body. Another good alternative is the usage of control flow `&&`/`||`.
+          value = :default
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        value = :default unless defined?(yield)
+      RUBY
+    end
+
+    it 'registers for argument value is `super`' do
+      expect_offense(<<~RUBY)
+        unless defined?(super)
+        ^^^^^^ Favor modifier `unless` usage when having a single-line body. Another good alternative is the usage of control flow `&&`/`||`.
+          value = :default
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        value = :default unless defined?(super)
+      RUBY
+    end
+
+    it 'accepts `defined?` when argument value is undefined' do
+      expect_no_offenses(<<~RUBY)
+        other_value = do_something
+
+        unless defined?(value)
+          value = :default
+        end
+      RUBY
+    end
+
+    it 'accepts `defined?` when argument value is undefined and the first condition' do
+      expect_no_offenses(<<~RUBY)
+        other_value = do_something
+
+        unless defined?(value) && condition
+          value = :default
+        end
+      RUBY
+    end
+
+    it 'accepts `defined?` when argument value is undefined and the last condition' do
+      expect_no_offenses(<<~RUBY)
+        other_value = do_something
+
+        unless condition && defined?(value)
+          value = :default
+        end
       RUBY
     end
   end

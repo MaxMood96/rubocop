@@ -29,7 +29,7 @@ module RuboCop
         MSG = '`%<kw_loc>s` at %<kw_loc_line>d, %<kw_loc_column>d is not ' \
               'aligned with `%<beginning>s` at ' \
               '%<begin_loc_line>d, %<begin_loc_column>d.'
-        ANCESTOR_TYPES = %i[kwbegin def defs class module block].freeze
+        ANCESTOR_TYPES = %i[kwbegin def defs class module block numblock].freeze
         ANCESTOR_TYPES_WITH_ACCESS_MODIFIERS = %i[def defs].freeze
         ALTERNATIVE_ACCESS_MODIFIERS = %i[public_class_method private_class_method].freeze
 
@@ -92,24 +92,25 @@ module RuboCop
           )
         end
 
+        # rubocop:disable Metrics/AbcSize
         def alignment_source(node, starting_loc)
           ending_loc =
             case node.type
-            when :block, :kwbegin
+            when :block, :numblock, :kwbegin
               node.loc.begin
             when :def, :defs, :class, :module,
                  :lvasgn, :ivasgn, :cvasgn, :gvasgn, :casgn
               node.loc.name
             when :masgn
-              mlhs_node, = *node
-              mlhs_node.loc.expression
+              node.lhs.source_range
             else
-              # It is a wrapper with access modifier.
-              node.child_nodes.first.loc.name
+              # It is a wrapper with receiver of object attribute or access modifier.
+              node.receiver&.source_range || node.child_nodes.first.loc.name
             end
 
           range_between(starting_loc.begin_pos, ending_loc.end_pos).source
         end
+        # rubocop:enable Metrics/AbcSize
 
         # We will use ancestor or wrapper with access modifier.
 
@@ -196,7 +197,7 @@ module RuboCop
           if begin_end_alignment_style == 'start_of_line'
             start_line_range(alignment_node)
           else
-            alignment_node.loc.expression
+            alignment_node.source_range
           end
         end
 

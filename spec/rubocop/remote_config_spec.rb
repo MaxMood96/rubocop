@@ -22,7 +22,7 @@ RSpec.describe RuboCop::RemoteConfig do
   describe '.file' do
     it 'downloads the file if the file does not exist' do
       expect(remote_config).to eq(cached_file_path)
-      expect(File.exist?(cached_file_path)).to be_truthy
+      expect(File).to exist(cached_file_path)
     end
 
     it 'does not download the file if cache lifetime has not been reached' do
@@ -39,6 +39,16 @@ RSpec.describe RuboCop::RemoteConfig do
       assert_requested :get, remote_config_url
     end
 
+    context 'when the remote URL is not a valid URI' do
+      let(:remote_config_url) { 'http://example.com/rübocop.yml' }
+
+      it 'raises a configuration error' do
+        expect do
+          remote_config
+        end.to raise_error(RuboCop::ConfigNotFoundError, /is not a valid URI/)
+      end
+    end
+
     context 'when remote URL is configured with token auth' do
       let(:token) { 'personal_access_token' }
       let(:remote_config_url) { "http://#{token}@example.com/rubocop.yml" }
@@ -52,7 +62,7 @@ RSpec.describe RuboCop::RemoteConfig do
 
       it 'downloads the file if the file does not exist' do
         expect(remote_config).to eq(cached_file_path)
-        expect(File.exist?(cached_file_path)).to be_truthy
+        expect(File).to exist(cached_file_path)
       end
 
       it 'does not download the file if cache lifetime has not been reached' do
@@ -97,7 +107,7 @@ RSpec.describe RuboCop::RemoteConfig do
 
       it 'downloads the file if the file does not exist' do
         expect(remote_config).to eq(cached_file_path)
-        expect(File.exist?(cached_file_path)).to be_truthy
+        expect(File).to exist(cached_file_path)
       end
 
       it 'does not download the file if cache lifetime has not been reached' do
@@ -151,7 +161,7 @@ RSpec.describe RuboCop::RemoteConfig do
 
       it 'follows the redirect and downloads the file' do
         expect(remote_config).to eq(cached_file_path)
-        expect(File.exist?(cached_file_path)).to be_truthy
+        expect(File).to exist(cached_file_path)
       end
     end
 

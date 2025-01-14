@@ -2,8 +2,8 @@
 
 module RuboCop
   module Cop
-    # Common methods shared by Style/TrailingCommaInArguments and
-    # Style/TrailingCommaInLiteral
+    # Common methods shared by Style/TrailingCommaInArguments,
+    # Style/TrailingCommaInArrayLiteral and Style/TrailingCommaInHashLiteral
     module TrailingComma
       include ConfigurableEnforcedStyle
       include RangeHelp
@@ -75,7 +75,7 @@ module RuboCop
 
       def inside_comment?(range, comma_offset)
         comment = processed_source.comment_at_line(range.line)
-        comment && comment.loc.expression.begin_pos < range.begin_pos + comma_offset
+        comment && comment.source_range.begin_pos < range.begin_pos + comma_offset
       end
 
       # Returns true if the node has round/square/curly brackets.
@@ -106,7 +106,7 @@ module RuboCop
       end
 
       def elements(node)
-        return node.children unless %i[csend send].include?(node.type)
+        return node.children unless node.call_type?
 
         node.arguments.flat_map do |argument|
           # For each argument, if it is a multi-line hash without braces,

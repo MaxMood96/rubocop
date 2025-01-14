@@ -68,11 +68,11 @@ module RuboCop
 
           return unless offending_selector?(node, selector)
 
-          add_offense(node.send_node.source_range, message: message(node, selector)) do |corrector|
-            if node.send_node.source == 'lambda'
-              autocorrect_method_to_literal(corrector, node)
-            else
+          add_offense(node.send_node, message: message(node, selector)) do |corrector|
+            if node.send_node.lambda_literal?
               LambdaLiteralToMethodCorrector.new(node).call(corrector)
+            else
+              autocorrect_method_to_literal(corrector, node)
             end
           end
         end

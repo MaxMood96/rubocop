@@ -95,7 +95,7 @@ module RuboCop
           def compound_assignment(node)
             # Methods setter cannot be detected for multiple assignments
             # and shorthand assigns, so we'll count them here instead
-            children = node.masgn_type? ? node.children[0].children : node.children
+            children = node.masgn_type? ? node.assignments : node.children
 
             will_be_miscounted = children.count do |child|
               child.respond_to?(:setter_method?) && !child.setter_method?
@@ -117,8 +117,7 @@ module RuboCop
           end
 
           def capturing_variable?(name)
-            # TODO: Remove `Symbol#to_s` after supporting only Ruby >= 2.7.
-            name && !name.to_s.start_with?('_')
+            name && !name.start_with?('_')
           end
 
           def branch?(node)

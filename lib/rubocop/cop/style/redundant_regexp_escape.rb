@@ -44,7 +44,8 @@ module RuboCop
 
         def on_regexp(node)
           each_escape(node) do |char, index, within_character_class|
-            next if allowed_escape?(node, char, index, within_character_class)
+            next if char.valid_encoding? && allowed_escape?(node, char, index,
+                                                            within_character_class)
 
             location = escape_range_at_index(node, index)
 
@@ -74,11 +75,18 @@ module RuboCop
 
         def char_class_begins_or_ends_with_escaped_hyphen?(node, index)
           # The hyphen character is allowed to be escaped within a character class
-          # but it's not necessry to escape hyphen if it's the first or last character
+          # but it's not necessary to escape hyphen if it's the first or last character
           # within the character class. This method checks if that's the case.
           # e.g. "[0-9\\-]" or "[\\-0-9]" would return true
-          contents_range(node).source[index - 1] == '[' ||
-            contents_range(node).source[index + 2] == ']'
+          content = contents_range(node).source
+
+          if content[index + 2] == ']'
+            true
+          elsif content[index - 1] == '['
+            index < 2 || content[index - 2] != '\\'
+          else
+            false
+          end
         end
 
         def delimiter?(node, char)
@@ -87,30 +95,14 @@ module RuboCop
           delimiters.include?(char)
         end
 
-        if Gem::Version.new(Regexp::Parser::VERSION) >= Gem::Version.new('2.0')
-          def each_escape(node)
-            node.parsed_tree&.traverse&.reduce(0) do |char_class_depth, (event, expr)|
-              yield(expr.text[1], expr.ts, !char_class_depth.zero?) if expr.type == :escape
+        def each_escape(node)
+          node.parsed_tree&.traverse&.reduce(0) do |char_class_depth, (event, expr)|
+            yield(expr.text[1], expr.ts, !char_class_depth.zero?) if expr.type == :escape
 
-              if expr.type == :set
-                char_class_depth + (event == :enter ? 1 : -1)
-              else
-                char_class_depth
-              end
-            end
-          end
-        # Please remove this `else` branch when support for regexp_parser 1.8 will be dropped.
-        # It's for compatibility with regexp_arser 1.8 and will never be maintained.
-        else
-          def each_escape(node)
-            node.parsed_tree&.traverse&.reduce(0) do |char_class_depth, (event, expr)|
-              yield(expr.text[1], expr.start_index, !char_class_depth.zero?) if expr.type == :escape
-
-              if expr.type == :set
-                char_class_depth + (event == :enter ? 1 : -1)
-              else
-                char_class_depth
-              end
+            if expr.type == :set
+              char_class_depth + (event == :enter ? 1 : -1)
+            else
+              char_class_depth
             end
           end
         end

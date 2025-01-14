@@ -3,7 +3,6 @@
 module RuboCop
   module Cop
     module Layout
-      #
       # Checks the indentation of here document closings.
       #
       # @example
@@ -73,7 +72,7 @@ module RuboCop
         end
 
         def argument_indentation_correct?(node)
-          return unless node.argument? || node.chained?
+          return false unless node.argument? || node.chained?
 
           opening_indentation(
             find_node_used_heredoc_argument(node.parent)
@@ -85,7 +84,7 @@ module RuboCop
         end
 
         def heredoc_opening(node)
-          node.loc.expression.source_line
+          node.source_range.source_line
         end
 
         def heredoc_closing(node)

@@ -8,6 +8,13 @@ RSpec.describe RuboCop::Cop::Style::RequireOrder, :config do
         require 'b'
       RUBY
     end
+
+    it 'registers no offense when single-quoted string and double-quoted string are mixed' do
+      expect_no_offenses(<<~RUBY)
+        require 'a'
+        require "b"
+      RUBY
+    end
   end
 
   context 'when only one `require`' do
@@ -88,6 +95,27 @@ RSpec.describe RuboCop::Cop::Style::RequireOrder, :config do
       expect_correction(<<~RUBY)
         require_relative 'a'
         require_relative 'b'
+      RUBY
+    end
+  end
+
+  context 'when multiple `require` are not sorted' do
+    it 'registers offense' do
+      expect_offense(<<~RUBY)
+        require 'd'
+        require 'a'
+        ^^^^^^^^^^^ Sort `require` in alphabetical order.
+        require 'b'
+        ^^^^^^^^^^^ Sort `require` in alphabetical order.
+        require 'c'
+        ^^^^^^^^^^^ Sort `require` in alphabetical order.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        require 'a'
+        require 'b'
+        require 'c'
+        require 'd'
       RUBY
     end
   end
@@ -188,7 +216,7 @@ RSpec.describe RuboCop::Cop::Style::RequireOrder, :config do
   end
 
   context 'when conditional with multiple unsorted `require` is used between `require`' do
-    it 'registers no offense' do
+    it 'registers an offense' do
       expect_offense(<<~RUBY)
         require 'd'
         if foo

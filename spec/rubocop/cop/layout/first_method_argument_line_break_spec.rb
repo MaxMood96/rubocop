@@ -95,7 +95,7 @@ RSpec.describe RuboCop::Cop::Layout::FirstMethodArgumentLineBreak, :config do
   context 'last element can be multiline' do
     let(:cop_config) { { 'AllowMultilineFinalElement' => true } }
 
-    it 'ignores last argument that is a multine Hash' do
+    it 'ignores last argument that is a multiline Hash' do
       expect_no_offenses(<<~RUBY)
         foo(bar, {
           a: b
@@ -138,6 +138,17 @@ RSpec.describe RuboCop::Cop::Layout::FirstMethodArgumentLineBreak, :config do
         foo(
         bar,
         baz)
+      RUBY
+    end
+  end
+
+  context 'AllowedMethods' do
+    let(:cop_config) { { 'AllowedMethods' => %w[something] } }
+
+    it 'does not register an offense for an allowed method' do
+      expect_no_offenses(<<~RUBY)
+        something(3, bar: 1,
+        baz: 2)
       RUBY
     end
   end

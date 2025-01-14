@@ -32,10 +32,15 @@ module RuboCop
         # allow turning off autocorrect on a cop by cop basis
         return true unless cop_config
 
-        return false if cop_config['AutoCorrect'] == false
+        # `false` is the same as `disabled` for backward compatibility.
+        return false if ['disabled', false].include?(cop_config['AutoCorrect'])
+
+        # When LSP is enabled, it is considered as editing source code,
+        # and autocorrection with `AutoCorrect: contextual` will not be performed.
+        return false if contextual_autocorrect? && LSP.enabled?
 
         # :safe_autocorrect is a derived option based on several command-line
-        # arguments - see Rubocop::Options#add_autocorrection_options
+        # arguments - see RuboCop::Options#add_autocorrection_options
         return safe_autocorrect? if @options.fetch(:safe_autocorrect, false)
 
         true
@@ -43,30 +48,65 @@ module RuboCop
 
       private
 
-      def disable_offense(range)
-        heredoc_range = surrounding_heredoc(range)
-        if heredoc_range
-          disable_offense_before_and_after(range_by_lines(heredoc_range))
+      def disable_offense(offense_range)
+        unbreakable_range = multiline_ranges(offense_range)&.find do |range|
+          range_overlaps_offense?(offense_range, range)
+        end
+
+        if unbreakable_range
+          disable_offense_before_and_after(range_by_lines(unbreakable_range))
         else
-          eol_comment = " # rubocop:todo #{cop_name}"
-          needed_line_length = (range.source_line + eol_comment).length
-          if needed_line_length <= max_line_length
-            disable_offense_at_end_of_line(range_of_first_line(range), eol_comment)
-          else
-            disable_offense_before_and_after(range_by_lines(range))
+          disable_offense_with_eol_or_surround_comment(offense_range)
+        end
+      end
+
+      def multiline_ranges(offense_range)
+        return if offense_range.empty?
+
+        processed_source.ast.each_node.filter_map do |node|
+          if surrounding_heredoc?(node)
+            heredoc_range(node)
+          elsif string_continuation?(node)
+            range_by_lines(node.source_range)
+          elsif surrounding_percent_array?(node) || multiline_string?(node)
+            node.source_range
           end
         end
       end
 
-      def surrounding_heredoc(offense_range)
-        # The empty offense range is an edge case that can be reached from the Lint/Syntax cop.
-        return nil if offense_range.empty?
+      def disable_offense_with_eol_or_surround_comment(range)
+        eol_comment = " # rubocop:todo #{cop_name}"
+        needed_line_length = (range.source_line + eol_comment).length
 
-        heredoc_nodes = processed_source.ast.each_descendant.select do |node|
-          node.respond_to?(:heredoc?) && node.heredoc?
+        if needed_line_length <= max_line_length
+          disable_offense_at_end_of_line(range_of_first_line(range), eol_comment)
+        else
+          disable_offense_before_and_after(range_by_lines(range))
         end
-        heredoc_nodes.map { |node| node.loc.expression.join(node.loc.heredoc_end) }
-                     .find { |range| range.contains?(offense_range) }
+      end
+
+      def range_overlaps_offense?(offense_range, range)
+        offense_range.begin_pos > range.begin_pos && range.overlaps?(offense_range)
+      end
+
+      def surrounding_heredoc?(node)
+        node.type?(:str, :dstr, :xstr) && node.heredoc?
+      end
+
+      def heredoc_range(node)
+        node.source_range.join(node.loc.heredoc_end)
+      end
+
+      def surrounding_percent_array?(node)
+        node.array_type? && node.percent_literal?
+      end
+
+      def string_continuation?(node)
+        (node.str_type? || node.dstr_type? || node.xstr_type?) && node.source.match?(/\\\s*$/)
+      end
+
+      def multiline_string?(node)
+        node.dstr_type? && node.multiline?
       end
 
       def range_of_first_line(range)

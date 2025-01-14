@@ -3,8 +3,7 @@
 module RuboCop
   module Cop
     module Layout
-      # Here we check if the arguments on a multi-line method
-      # definition are aligned.
+      # Check that the arguments on a multi-line method call are aligned.
       #
       # @example EnforcedStyle: with_first_argument (default)
       #   # good
@@ -79,7 +78,7 @@ module RuboCop
 
         def arguments_with_last_arg_pairs(node)
           items = node.arguments[0..-2]
-          last_arg = node.arguments.last
+          last_arg = node.last_argument
 
           if last_arg.hash_type? && !last_arg.braces?
             items += last_arg.pairs
@@ -142,15 +141,9 @@ module RuboCop
         end
 
         def enforce_hash_argument_with_separator?
-          return false unless hash_argument_config['Enabled']
-
           RuboCop::Cop::Layout::HashAlignment::SEPARATOR_ALIGNMENT_STYLES.any? do |style|
-            hash_argument_config[style]&.include?('separator')
+            config.for_enabled_cop('Layout/HashAlignment')[style]&.include?('separator')
           end
-        end
-
-        def hash_argument_config
-          config.for_cop('Layout/HashAlignment')
         end
       end
     end

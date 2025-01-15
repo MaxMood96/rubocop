@@ -22,7 +22,7 @@ RSpec.describe RuboCop::Formatter::TapFormatter do
       let(:offenses) { [] }
 
       it 'prints "ok"' do
-        expect(output.string.include?('ok 1')).to be(true)
+        expect(output.string).to include('ok 1')
       end
     end
 
@@ -46,7 +46,7 @@ RSpec.describe RuboCop::Formatter::TapFormatter do
       end
 
       it 'prints "not ok"' do
-        expect(output.string.include?('not ok 1')).to be(true)
+        expect(output.string).to include('not ok 1')
       end
     end
   end
@@ -105,7 +105,7 @@ RSpec.describe RuboCop::Formatter::TapFormatter do
 
       it 'reports all detected offenses for all failed files' do
         formatter.finished(files)
-        expect(output.string.include?(<<~OUTPUT)).to be(true)
+        expect(output.string).to include(<<~OUTPUT)
           1..3
           not ok 1 - lib/rubocop.rb
           # lib/rubocop.rb:2:3: C: [Correctable] foo
@@ -133,13 +133,13 @@ RSpec.describe RuboCop::Formatter::TapFormatter do
 
       it 'does not report offenses' do
         formatter.finished(files)
-        expect(output.string.include?('not ok')).to be(false)
+        expect(output.string).not_to include('not ok')
       end
     end
   end
 
   describe '#report_file', :config do
-    let(:cop_class) { RuboCop::Cop::Cop }
+    let(:cop_class) { RuboCop::Cop::Base }
     let(:output) { StringIO.new }
 
     before { cop.send(:begin_investigation, processed_source) }
@@ -152,10 +152,10 @@ RSpec.describe RuboCop::Formatter::TapFormatter do
       end
 
       it 'displays text containing the offending source line' do
-        location = source_range(source.index('[')..source.index(']'))
+        range = source_range(source.index('[')..source.index(']'))
 
-        cop.add_offense(nil, location: location, message: 'message 1')
-        formatter.report_file('test', cop.offenses)
+        offenses = cop.add_offense(range, message: 'message 1')
+        formatter.report_file('test', offenses)
 
         expect(output.string)
           .to eq <<~OUTPUT

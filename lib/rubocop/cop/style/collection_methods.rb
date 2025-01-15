@@ -25,6 +25,7 @@ module RuboCop
       #   # bad
       #   items.collect
       #   items.collect!
+      #   items.collect_concat
       #   items.inject
       #   items.detect
       #   items.find_all
@@ -33,6 +34,7 @@ module RuboCop
       #   # good
       #   items.map
       #   items.map!
+      #   items.flat_map
       #   items.reduce
       #   items.find
       #   items.select
@@ -47,7 +49,6 @@ module RuboCop
         def on_block(node)
           check_method_node(node.send_node)
         end
-
         alias on_numblock on_block
 
         def on_send(node)
@@ -55,6 +56,7 @@ module RuboCop
 
           check_method_node(node)
         end
+        alias on_csend on_send
 
         private
 

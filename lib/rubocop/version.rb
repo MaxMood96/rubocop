@@ -3,21 +3,28 @@
 module RuboCop
   # This module holds the RuboCop version information.
   module Version
-    STRING = '1.46.0'
+    STRING = '1.70.0'
 
-    MSG = '%<version>s (using Parser %<parser_version>s, ' \
+    MSG = '%<version>s (using %<parser_version>s, ' \
           'rubocop-ast %<rubocop_ast_version>s, ' \
+          'analyzing as Ruby %<target_ruby_version>s, ' \
           'running on %<ruby_engine>s %<ruby_version>s)%<server_mode>s [%<ruby_platform>s]'
 
-    CANONICAL_FEATURE_NAMES = { 'Rspec' => 'RSpec', 'Graphql' => 'GraphQL', 'Md' => 'Markdown',
-                                'Thread_safety' => 'ThreadSafety' }.freeze
-    EXTENSION_PATH_NAMES = { 'rubocop-md' => 'markdown' }.freeze
+    CANONICAL_FEATURE_NAMES = {
+      'Rspec' => 'RSpec', 'Graphql' => 'GraphQL', 'Md' => 'Markdown', 'Factory_bot' => 'FactoryBot',
+      'Thread_safety' => 'ThreadSafety', 'Rspec_rails' => 'RSpecRails'
+    }.freeze
+    EXTENSION_PATH_NAMES = {
+      'rubocop-md' => 'markdown', 'rubocop-factory_bot' => 'factory_bot'
+    }.freeze
 
+    # NOTE: Marked as private but used by gems like standard.
     # @api private
     def self.version(debug: false, env: nil)
       if debug
-        verbose_version = format(MSG, version: STRING, parser_version: Parser::VERSION,
+        verbose_version = format(MSG, version: STRING, parser_version: parser_version,
                                       rubocop_ast_version: RuboCop::AST::Version::STRING,
+                                      target_ruby_version: target_ruby_version(env),
                                       ruby_engine: RUBY_ENGINE, ruby_version: RUBY_VERSION,
                                       server_mode: server_mode,
                                       ruby_platform: RUBY_PLATFORM)
@@ -36,14 +43,29 @@ module RuboCop
     end
 
     # @api private
-    def self.extension_versions(env)
-      features = Util.silence_warnings do
-        # Suppress any config issues when loading the config (ie. deprecations,
-        # pending cops, etc.).
-        env.config_store.unvalidated.for_pwd.loaded_features.sort
+    def self.verbose(env: nil)
+      version(debug: true, env: env)
+    end
+
+    # @api private
+    def self.parser_version
+      config_path = ConfigFinder.find_config_path(Dir.pwd)
+      yaml = Util.silence_warnings do
+        ConfigLoader.load_yaml_configuration(config_path)
       end
 
-      features.map do |loaded_feature|
+      if yaml.dig('AllCops', 'ParserEngine') == 'parser_prism'
+        require 'prism'
+        "Prism #{Prism::VERSION}"
+      else
+        "Parser #{Parser::VERSION}"
+      end
+    end
+
+    # @api private
+    def self.extension_versions(env)
+      features = config_for_pwd(env).loaded_features.sort
+      features.filter_map do |loaded_feature|
         next unless (match = loaded_feature.match(/rubocop-(?<feature>.*)/))
 
         # Get the expected name of the folder containing the extension code.
@@ -61,7 +83,25 @@ module RuboCop
         next unless (feature_version = feature_version(feature))
 
         "  - #{loaded_feature} #{feature_version}"
-      end.compact
+      end
+    end
+
+    # @api private
+    def self.target_ruby_version(env)
+      if env
+        config_for_pwd(env).target_ruby_version
+      else
+        TargetRuby.new(Config.new).version
+      end
+    end
+
+    # @api private
+    def self.config_for_pwd(env)
+      Util.silence_warnings do
+        # Suppress any config issues when loading the config (ie. deprecations,
+        # pending cops, etc.).
+        env.config_store.unvalidated.for_pwd
+      end
     end
 
     # Returns feature version in one of two ways:

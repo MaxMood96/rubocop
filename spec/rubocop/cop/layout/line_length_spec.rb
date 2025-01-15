@@ -167,6 +167,17 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
     end
 
+    context 'with URI starting before or after limit depending on tabs count' do
+      let(:cop_config) { { 'Max' => 30, 'AllowURI' => true } }
+
+      it 'registers an offense for the line' do
+        expect_offense(<<~RUBY)
+          \t\t\t\t# There is some content http://test.com
+                                    ^^^^^^^^^^^^^^^^^ Line is too long. [47/30]
+        RUBY
+      end
+    end
+
     context 'and an error other than URI::InvalidURIError is raised ' \
             'while validating a URI-ish string' do
       let(:cop_config) { { 'Max' => 80, 'AllowURI' => true, 'URISchemes' => %w[LDAP] } }
@@ -310,8 +321,8 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       context 'with a trailing RuboCop directive' do
         it 'registers an offense for the line' do
           expect_offense(<<~RUBY)
-            #{'a' * 80} # rubcop:disable Layout/SomeCop
-            #{' ' * 80}^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [112/80]
+            #{'a' * 80} # rubocop:disable Layout/SomeCop
+            #{' ' * 80}^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [113/80]
           RUBY
         end
       end
@@ -339,7 +350,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
   context 'when IgnoreCopDirectives is enabled' do
     let(:cop_config) { { 'Max' => 80, 'IgnoreCopDirectives' => true } }
 
-    context 'and the Rubocop directive is excessively long' do
+    context 'and the RuboCop directive is excessively long' do
       it 'accepts the line' do
         expect_no_offenses(<<~RUBY)
           # rubocop:disable Metrics/SomeReallyLongMetricNameThatShouldBeMuchShorterAndNeedsANameChange
@@ -347,7 +358,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
     end
 
-    context 'and the Rubocop directive causes an excessive line length' do
+    context 'and the RuboCop directive causes an excessive line length' do
       it 'accepts the line' do
         expect_no_offenses(<<~RUBY)
           def method_definition_that_is_just_under_the_line_length_limit(foo, bar) # rubocop:disable Metrics/AbcSize
@@ -464,11 +475,383 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       it "accepts a line that's including URI in quotes with text" do
         expect_no_offenses("\t\t# See 'https://github.com/rubocop/rubocop'")
       end
+
+      it 'registers the line which looks like YARD comment' do
+        expect_offense(<<-RUBY)
+	        \texpect(some_exception_variable) {|e| e.url.should == 'http://host/path'}
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [83/30]
+        RUBY
+      end
     end
   end
 
   context 'autocorrection' do
-    let(:cop_config) { { 'Max' => 40, 'AllowedPatterns' => nil, 'AutoCorrect' => true } }
+    let(:split_strings) { true }
+    let(:cop_config) do
+      {
+        'Max' => 40,
+        'AllowedPatterns' => nil,
+        'AutoCorrect' => true,
+        'SplitStrings' => split_strings
+      }
+    end
+
+    context 'string' do
+      context 'when under limit' do
+        it 'does not add any offenses' do
+          expect_no_offenses(<<~RUBY)
+            'aaaaaaaaaaaaaaaaaaa'
+          RUBY
+        end
+
+        it 'does not add any offenses with interpolation' do
+          expect_no_offenses(<<~'RUBY')
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#{bbbbb}'
+          RUBY
+        end
+      end
+
+      context 'when over limit' do
+        context 'when SplitStrings: true' do
+          let(:split_strings) { true }
+
+          it 'breaks the string at the limit' do
+            expect_offense(<<~RUBY)
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbb'
+                                                      ^^^ Line is too long. [43/40]
+            RUBY
+
+            expect_correction(<<~'RUBY')
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+              'bbbbb'
+            RUBY
+          end
+
+          context 'when the string straddles after the limit' do
+            it 'registers an offense but does not correct' do
+              expect_offense(<<~RUBY)
+                foo
+                                                     'aaaa'
+                                                        ^^^ Line is too long. [43/40]
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+
+          context 'when the string starts after the limit' do
+            it 'registers an offense but does not correct' do
+              expect_offense(<<~RUBY)
+                foo
+                                                        'aaaa'
+                                                        ^^^^^^ Line is too long. [46/40]
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+
+          context 'when there is already a continuation' do
+            it 'breaks the string at the limit' do
+              expect_offense(<<~'RUBY')
+                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+                'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcccccccccccc'
+                                                        ^^^^^^^^^^ Line is too long. [50/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+                'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' \
+                'cccccccccccc'
+              RUBY
+            end
+          end
+
+          context 'when the string is not at the start of the source' do
+            it 'breaks the string at the limit' do
+              expect_offense(<<~RUBY)
+                x = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbb'
+                                                        ^^^ Line is too long. [43/40]
+              RUBY
+
+              expect_correction(<<~'RUBY', loop: false)
+                x = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+                'bbbbb'
+              RUBY
+            end
+
+            context 'with spaces' do
+              it 'breaks the string at the last space' do
+                expect_offense(<<~RUBY)
+                  x = 'aaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbb'
+                                                          ^^^^ Line is too long. [44/40]
+                RUBY
+
+                expect_correction(<<~'RUBY', loop: false)
+                  x = 'aaaaaaaaaaaaaaaaaaaaaa ' \
+                  'bbbbbbbbbbbbbbb'
+                RUBY
+              end
+            end
+
+            context 'with escape characters' do
+              it 'breaks the string at the last space' do
+                expect_offense(<<~'RUBY')
+                  x = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nbbbbbbbbbb'
+                                                          ^^^^^^^^^ Line is too long. [49/40]
+                RUBY
+
+                expect_correction(<<~'RUBY', loop: false)
+                  x = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' \
+                  '\nbbbbbbbbbb'
+                RUBY
+              end
+            end
+          end
+
+          context 'inside a hash' do
+            it 'breaks the hash not the string' do
+              expect_offense(<<~RUBY)
+                { x: 'aaaa', y: 'bbbbbbbbbbbbbbbbbbbbbbbbbbb', z: 'cccccccccccccccccccccccccccccccccccccccccc' }
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [96/40]
+              RUBY
+
+              expect_correction(<<~RUBY)
+                { x: 'aaaa',#{' '}
+                y: 'bbbbbbbbbbbbbbbbbbbbbbbbbbb', z: 'cccccccccccccccccccccccccccccccccccccccccc' }
+              RUBY
+            end
+          end
+
+          context 'due to a comment' do
+            it 'registers an offense but does not correct' do
+              expect_offense(<<~RUBY)
+                'aaaaaaaaaaaaaaaaaaaaa' # this comment makes the line too long
+                                                        ^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [62/40]
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+
+          context 'when there is a space in the string' do
+            it 'breaks the string at the space' do
+              expect_offense(<<~RUBY)
+                'aaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbb'
+                                                        ^^^^^^ Line is too long. [46/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                'aaaaaaaaaaaaaaaaaaaaaaaaa ' \
+                'bbbbbbbbbbbbbbbbbb'
+              RUBY
+            end
+          end
+
+          context 'when there are multiple spaces in the string' do
+            it 'breaks the string at the last space before the limit' do
+              expect_offense(<<~RUBY)
+                'aaaaaaaaaaaaaaaaaaaaaaaaa bbbbb ccccccccc dddddddddddddddddddddd eeeeeeeeeeee'
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [79/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                'aaaaaaaaaaaaaaaaaaaaaaaaa bbbbb ' \
+                'ccccccccc dddddddddddddddddddddd ' \
+                'eeeeeeeeeeee'
+              RUBY
+            end
+          end
+
+          context 'when there is an escape character at the limit' do
+            it 'breaks the string before the escape character' do
+              expect_offense(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nbbbb"
+                                                        ^^^ Line is too long. [43/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+                "\nbbbb"
+              RUBY
+            end
+          end
+
+          context 'when there is an \u escape character at the limit' do
+            it 'breaks the string before the escape character' do
+              expect_offense(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\u0061bbbb"
+                                                        ^^^^^^ Line is too long. [46/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+                "\u0061bbbb"
+              RUBY
+            end
+          end
+
+          context 'when there is an \x escape character at the limit' do
+            it 'breaks the string before the escape character' do
+              expect_offense(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\x61bbbb"
+                                                        ^^ Line is too long. [42/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+                "\x61bbbb"
+              RUBY
+            end
+          end
+
+          context 'when there is a multibyte character at the limit' do
+            it 'breaks the string at the limit' do
+              expect_offense(<<~RUBY)
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaあbbbbb"
+                                                        ^^^^ Line is too long. [44/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+                "あbbbbb"
+              RUBY
+            end
+          end
+
+          context 'when the string is inside a %{}' do
+            it 'registers an offense but does not correct' do
+              expect_offense(<<~RUBY)
+                %{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+                                                        ^^^^ Line is too long. [44/40]
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+
+          %i[%q %Q %i %I %w %W].each do |macro|
+            context "when the string is inside a #{macro}" do
+              it 'registers an offense but does not correct' do
+                expect_offense(<<~RUBY, macro: macro)
+                  %{macro}[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]
+                  _{macro}                                      ^^^^^ Line is too long. [45/40]
+                RUBY
+
+                expect_no_corrections
+              end
+            end
+          end
+
+          context 'when the string is inside a heredoc' do
+            it 'registers an offense but does not correct' do
+              expect_offense(<<~RUBY)
+                <<~STR
+                  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                                                        ^^^ Line is too long. [43/40]
+                STR
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+
+          context 'with interpolation' do
+            it 'breaks the string before the interpolation' do
+              expect_offense(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#{bbbb}"
+                                                        ^^^^ Line is too long. [44/40]
+              RUBY
+
+              expect_correction(<<~'RUBY')
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+                "#{bbbb}"
+              RUBY
+            end
+
+            context 'when the interpolation is before the limit' do
+              it 'breaks the string at the limit' do
+                expect_offense(<<~'RUBY')
+                  "#{bbbb}aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                                                          ^^^^^^^^^^^^^^ Line is too long. [54/40]
+                RUBY
+
+                expect_correction(<<~'RUBY')
+                  "#{bbbb}aaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+                  "aaaaaaaaaaaaaaaa"
+                RUBY
+              end
+            end
+
+            context 'when the interpolation comes after the limit' do
+              it 'breaks the string but not the interpolation' do
+                expect_offense(<<~'RUBY')
+                  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa#{bbbb}"
+                                                          ^^^^^^^^^^^^^^ Line is too long. [54/40]
+                RUBY
+
+                expect_correction(<<~'RUBY')
+                  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+                  "aaaaaaaaa#{bbbb}"
+                RUBY
+              end
+            end
+
+            context 'when the entire string is interpolation' do
+              it 'registers an offense but does not correct' do
+                expect_offense(<<~'RUBY')
+                  "#{aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+                                                          ^^^^^^^^^^^^^^ Line is too long. [54/40]
+                RUBY
+
+                expect_no_corrections
+              end
+            end
+
+            context 'with multiple interpolations' do
+              it 'breaks the string where appropriate' do
+                expect_offense(<<~'RUBY')
+                  "#{aaaaa}bbbbbbb#{cccccc}ddddddddddddddddddddd#{eeeeeeeeeeee}"
+                                                          ^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [62/40]
+                RUBY
+
+                expect_correction(<<~'RUBY')
+                  "#{aaaaa}bbbbbbb#{cccccc}dddddddddddd" \
+                  "ddddddddd#{eeeeeeeeeeee}"
+                RUBY
+              end
+            end
+
+            context 'nested interpolation' do
+              it 'breaks the string before the outer interpolation' do
+                expect_offense(<<~'RUBY')
+                  "aaaaaaaaaaaaa#{"#{bbbbbbbbbbbbbbbbbbbbbbbb}"}"
+                                                          ^^^^^^^ Line is too long. [47/40]
+                RUBY
+
+                expect_correction(<<~'RUBY')
+                  "aaaaaaaaaaaaa" \
+                  "#{"#{bbbbbbbbbbbbbbbbbbbbbbbb}"}"
+                RUBY
+              end
+            end
+          end
+        end
+
+        context 'when SplitStrings: false' do
+          let(:split_strings) { false }
+
+          it 'registers an offense but does not correct' do
+            expect_offense(<<~RUBY)
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+                                                      ^^^ Line is too long. [43/40]
+            RUBY
+
+            expect_no_corrections
+          end
+        end
+      end
+    end
 
     context 'hash' do
       context 'when under limit' do
@@ -877,6 +1260,292 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
     end
 
+    context 'safe navigation method call' do
+      context 'when under limit' do
+        it 'does not add any offenses' do
+          expect_no_offenses(<<~RUBY)
+            foo&.bar(foo: 1, bar: "2")
+          RUBY
+        end
+      end
+
+      context 'when two together' do
+        it 'does not add any offenses' do
+          expect_no_offenses(<<~RUBY)
+            def baz(bar)
+              foo&.bar(shipment, actionable) &&
+                bar(shipment, actionable)
+            end
+          RUBY
+        end
+      end
+
+      context 'when over limit' do
+        it 'adds an offense and autocorrects it' do
+          expect_offense(<<~RUBY)
+            foo&.bar(abc: "100000", def: "100000", ghi: "100000", jkl: "100000", mno: "100000")
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [83/40]
+          RUBY
+
+          expect_correction(<<~RUBY)
+            foo&.bar(abc: "100000", def: "100000",\s
+            ghi: "100000", jkl: "100000", mno: "100000")
+          RUBY
+        end
+      end
+
+      context 'when unparenthesized' do
+        context 'when there is one argument' do
+          it 'does not autocorrect' do
+            expect_offense(<<~RUBY)
+              foo&.bar xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+                                                      ^^ Line is too long. [42/40]
+            RUBY
+
+            expect_no_corrections
+          end
+        end
+
+        context 'when there are multiple arguments' do
+          it 'splits the line after the first element' do
+            args = 'x' * 28
+            expect_offense(<<~RUBY, args: args)
+              foo&.bar #{args}, abc
+                       _{args}   ^^ Line is too long. [42/40]
+            RUBY
+
+            expect_correction(<<~RUBY, loop: false)
+              foo&.bar #{args},#{trailing_whitespace}
+              abc
+            RUBY
+          end
+        end
+      end
+
+      context 'when call with hash on same line' do
+        it 'adds an offense only to outer and autocorrects it' do
+          expect_offense(<<~RUBY)
+            foo&.bar(abc: "100000", def: "100000", ghi: {abc: "100000"}, jkl: "100000", mno: "100000")
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [90/40]
+          RUBY
+
+          expect_correction(<<~RUBY)
+            foo&.bar(abc: "100000", def: "100000",\s
+            ghi: {abc: "100000"}, jkl: "100000", mno: "100000")
+          RUBY
+        end
+      end
+
+      context 'with a hash with a too long first item' do
+        context 'when parenthesized' do
+          it 'corrects' do
+            expect_offense(<<~RUBY)
+              foo&.bar(abc: '10000000000000000000000000000000000000000000000000000', def: '1000')
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [83/40]
+            RUBY
+
+            expect_correction(<<~RUBY)
+              foo&.bar(
+              abc: '10000000000000000000000000000000000000000000000000000', def: '1000')
+            RUBY
+          end
+        end
+
+        context 'when the hash is parenthesized' do
+          it 'corrects' do
+            expect_offense(<<~RUBY)
+              foo&.bar({ abc: '10000000000000000000000000000000000000000000000000000', def: '1000' })
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [87/40]
+            RUBY
+
+            expect_correction(<<~RUBY)
+              foo&.bar({#{trailing_whitespace}
+              abc: '10000000000000000000000000000000000000000000000000000', def: '1000' })
+            RUBY
+          end
+        end
+
+        context 'when not parenthesized' do
+          context 'when there is only one element' do
+            it 'does not autocorrect' do
+              expect_offense(<<~RUBY)
+                foo&.bar abc: '10000000000000000000000000000000000000000000000000000'
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [69/40]
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+
+          context 'when there are multiple elements' do
+            it 'breaks after the method call' do
+              expect_offense(<<~RUBY)
+                foo&.bar abc: '10000000000000000000000000000000000000000000000000000', ghi: '1000'
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [82/40]
+              RUBY
+
+              expect_correction(<<~RUBY, loop: false)
+                foo&.bar abc: '10000000000000000000000000000000000000000000000000000',#{trailing_whitespace}
+                ghi: '1000'
+              RUBY
+            end
+          end
+
+          context 'when on multiple lines' do
+            it 'does not correct' do
+              expect_offense(<<~RUBY)
+                foo&.bar abc: '10000000000000000000000000000000000000000000000000000',
+                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [70/40]
+                    ghi: '1000'
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+        end
+      end
+
+      context 'when two method calls' do
+        context 'when the inner uses safe navigation' do
+          it 'adds an offense only to outer and autocorrects it' do
+            expect_offense(<<~RUBY)
+              get(1000000, 30000, foo&.bar(44440000, 30000, 39999, 19929120312093))
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [69/40]
+            RUBY
+
+            expect_correction(<<~RUBY)
+              get(1000000, 30000,\s
+              foo&.bar(44440000, 30000, 39999, 19929120312093))
+            RUBY
+          end
+        end
+
+        context 'when the outer uses safe navigation' do
+          it 'adds an offense only to outer and autocorrects it' do
+            expect_offense(<<~RUBY)
+              get&.bar(1000000, 30000, foo(44440000, 30000, 39999, 19929120312093))
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [69/40]
+            RUBY
+
+            expect_correction(<<~RUBY)
+              get&.bar(1000000, 30000,\s
+              foo(44440000, 30000, 39999, 19929120312093))
+            RUBY
+          end
+        end
+
+        context 'when both use safe navigation' do
+          it 'adds an offense only to outer and autocorrects it' do
+            expect_offense(<<~RUBY)
+              get&.bar(1000000, 30000, foo&.baz(44440000, 30000, 39999, 19929120312093))
+                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [74/40]
+            RUBY
+
+            expect_correction(<<~RUBY)
+              get&.bar(1000000, 30000,\s
+              foo&.baz(44440000, 30000, 39999, 19929120312093))
+            RUBY
+          end
+        end
+      end
+
+      context 'when nested method calls allows outer to get broken up first' do
+        it 'adds offense and does not autocorrect' do
+          expect_offense(<<~RUBY)
+            get(1000000,
+            foo&.bar(44440000, 30000, 39999, 1992), foo&.baz(44440000, 30000, 39999, 12093))
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [80/40]
+          RUBY
+
+          expect_no_corrections
+        end
+      end
+
+      context 'when nested method calls with safe navigation allows outer to get broken up first' do
+        it 'adds offense and does not autocorrect' do
+          expect_offense(<<~RUBY)
+            get&.foo(1000000,
+            foo&.bar(44440000, 30000, 39999, 1992), foo&.baz(44440000, 30000, 39999, 12093))
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [80/40]
+          RUBY
+
+          expect_no_corrections
+        end
+      end
+
+      context 'with long argument list' do
+        it 'registers an offense and autocorrects it' do
+          expect_offense(<<~RUBY)
+            foo&.bar :first_name, :last_name, :email, :username, :country, :state, :city, :postal_code
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [90/40]
+          RUBY
+
+          expect_correction(<<~RUBY)
+            foo&.bar :first_name, :last_name,#{trailing_whitespace}
+            :email, :username, :country, :state, :city, :postal_code
+          RUBY
+        end
+      end
+
+      context 'with a heredoc argument' do
+        it 'does not break up the line' do
+          args = 'x' * 20
+          expect_offense(<<~RUBY, args: args)
+            foo&.bar(<<~STRING, #{args}xxx)
+                                _{args}^^^^ Line is too long. [44/40]
+            STRING
+          RUBY
+
+          expect_no_corrections
+        end
+
+        it 'does not break up the line when parentheses are omitted' do
+          args = 'x' * 20
+          expect_offense(<<~RUBY, args: args)
+            foo&.bar <<~STRING, #{args}xxx
+                                _{args}^^^ Line is too long. [43/40]
+            STRING
+          RUBY
+
+          expect_no_corrections
+        end
+
+        context 'and other arguments before the heredoc' do
+          it 'can break up the line before the heredoc argument' do
+            args = 'x' * 15
+            expect_offense(<<~RUBY, args: args)
+              foo&.bar(abc, <<~STRING, #{args}xxx)
+                                       _{args}^^^^ Line is too long. [44/40]
+              STRING
+            RUBY
+
+            expect_correction(<<~RUBY)
+              foo&.bar(abc,#{trailing_whitespace}
+              <<~STRING, #{args}xxx)
+              STRING
+            RUBY
+          end
+        end
+
+        context 'and the heredoc is after the line should split' do
+          it 'can break up the line before the heredoc argument' do
+            args = 'x' * 29
+            expect_offense(<<~RUBY, args: args)
+              foo&.bar(#{args}, <<~STRING)
+                       _{args}  ^^^^^^^^^^ Line is too long. [50/40]
+              STRING
+            RUBY
+
+            expect_correction(<<~RUBY)
+              foo&.bar(#{args},#{trailing_whitespace}
+              <<~STRING)
+              STRING
+            RUBY
+          end
+        end
+      end
+    end
+
     context 'array' do
       context 'when under limit' do
         it 'does not add any offenses' do
@@ -933,6 +1602,36 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
           RUBY
 
           expect_no_corrections
+        end
+      end
+    end
+
+    context 'breakable collection' do
+      context 'method call inside a hash' do
+        it 'breaks the hash, not the method' do
+          expect_offense(<<~RUBY)
+            { foo: 1234567890, bar: method_call(x, y, z) }
+                                                    ^^^^^^ Line is too long. [46/40]
+          RUBY
+
+          expect_correction(<<~RUBY)
+            { foo: 1234567890,#{trailing_whitespace}
+            bar: method_call(x, y, z) }
+          RUBY
+        end
+      end
+
+      context 'safe navigation method call inside a hash' do
+        it 'breaks the hash, not the method' do
+          expect_offense(<<~RUBY)
+            { foo: 1234567890, bar: foo&.bar(x, y, z) }
+                                                    ^^^ Line is too long. [43/40]
+          RUBY
+
+          expect_correction(<<~RUBY)
+            { foo: 1234567890,#{trailing_whitespace}
+            bar: foo&.bar(x, y, z) }
+          RUBY
         end
       end
     end
@@ -1086,7 +1785,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
 
       context 'when over limit' do
-        it 'adds offense and autocorrects it by breaking the semicolonbefore the hash' do
+        it 'adds offense and autocorrects it by breaking the semicolon before the hash' do
           expect_offense(<<~RUBY)
             {foo: 1, bar: "2"}; a = 400000000000 + 500000000000000
                                                     ^^^^^^^^^^^^^^ Line is too long. [54/40]
@@ -1100,7 +1799,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
 
       context 'when over limit and semicolon at end of line' do
-        it 'adds offense and autocorrects it by breaking the first semicolonbefore the hash' do
+        it 'adds offense and autocorrects it by breaking the first semicolon before the hash' do
           expect_offense(<<~RUBY)
             {foo: 1, bar: "2"}; a = 400000000000 + 500000000000000;
                                                     ^^^^^^^^^^^^^^^ Line is too long. [55/40]
@@ -1114,7 +1813,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
 
       context 'when over limit and many spaces around semicolon' do
-        it 'adds offense and autocorrects it by breaking the semicolonbefore the hash' do
+        it 'adds offense and autocorrects it by breaking the semicolon before the hash' do
           expect_offense(<<~RUBY)
             {foo: 1, bar: "2"}  ;   a = 400000000000 + 500000000000000
                                                     ^^^^^^^^^^^^^^^^^^ Line is too long. [58/40]
@@ -1128,7 +1827,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
 
       context 'when over limit and many semicolons' do
-        it 'adds offense and autocorrects it by breaking the semicolonbefore the hash' do
+        it 'adds offense and autocorrects it by breaking the semicolon before the hash' do
           expect_offense(<<~RUBY)
             {foo: 1, bar: "2"}  ;;; a = 400000000000 + 500000000000000
                                                     ^^^^^^^^^^^^^^^^^^ Line is too long. [58/40]
@@ -1142,7 +1841,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
 
       context 'when over limit and one semicolon at the end' do
-        it 'adds offense and does not autocorrectbefore the hash' do
+        it 'adds offense and does not autocorrect before the hash' do
           expect_offense(<<~RUBY)
             a = 400000000000 + 500000000000000000000;
                                                     ^ Line is too long. [41/40]
@@ -1153,7 +1852,7 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
 
       context 'when over limit and many semicolons at the end' do
-        it 'adds offense and does not autocorrectbefore the hash' do
+        it 'adds offense and does not autocorrect before the hash' do
           expect_offense(<<~RUBY)
             a = 400000000000 + 500000000000000000000;;;;;;;
                                                     ^^^^^^^ Line is too long. [47/40]
@@ -1178,13 +1877,16 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
       end
 
       context 'semicolons inside string literal' do
-        it 'adds offense and autocorrects elsewhere' do
+        it 'adds offense and autocorrects' do
           expect_offense(<<~RUBY)
             "00000000000000000;0000000000000000000'000000;00000'0000;0000;000"
                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [66/40]
           RUBY
 
-          expect_no_corrections
+          expect_correction(<<~'RUBY')
+            "00000000000000000;000000000000000000" \
+            "0'000000;00000'0000;0000;000"
+          RUBY
         end
       end
     end
@@ -1199,6 +1901,41 @@ RSpec.describe RuboCop::Cop::Layout::LineLength, :config do
               SELECT a b c d a b FROM c d a b c d ; COUNT(*) a b
                                                     ^^^^^^^^^^^^ Line is too long. [52/40]
             SQL
+          RUBY
+
+          expect_no_corrections
+        end
+      end
+
+      context 'when HEREDOC start delimiter has a chained method with arguments that go over limit' do
+        it 'adds offense and does not autocorrect' do
+          expect_offense(<<~RUBY)
+            str = <<~HEREDOC.do_something.with_args(foo: '', bar: '', baz: '')
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [66/40]
+              text
+            HEREDOC
+          RUBY
+
+          expect_no_corrections
+        end
+
+        it 'adds offense and does not autocorrect for `dstr`' do
+          expect_offense(<<~'RUBY')
+            str = <<~HEREDOC.do_something.with_args(foo: '', bar: '', baz: '')
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [66/40]
+              #{text}
+            HEREDOC
+          RUBY
+
+          expect_no_corrections
+        end
+
+        it 'adds offense and does not autocorrect for `xstr`' do
+          expect_offense(<<~RUBY)
+            str = <<~`HEREDOC`.do_something.with_args(foo: '', bar: '', baz: '')
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Line is too long. [68/40]
+              text
+            HEREDOC
           RUBY
 
           expect_no_corrections

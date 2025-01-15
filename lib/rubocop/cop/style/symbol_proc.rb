@@ -37,6 +37,42 @@ module RuboCop
       #   # ArgumentError: wrong number of arguments (given 1, expected 0)
       #   ----
       #
+      #   It is also unsafe because `Symbol#to_proc` does not work with
+      #   `protected` methods which would otherwise be accessible.
+      #
+      #   For example:
+      #
+      #   [source,ruby]
+      #   ----
+      #   class Box
+      #     def initialize
+      #       @secret = rand
+      #     end
+      #
+      #     def normal_matches?(*others)
+      #       others.map { |other| other.secret }.any?(secret)
+      #     end
+      #
+      #     def symbol_to_proc_matches?(*others)
+      #       others.map(&:secret).any?(secret)
+      #     end
+      #
+      #     protected
+      #
+      #     attr_reader :secret
+      #   end
+      #
+      #   boxes = [Box.new, Box.new]
+      #   Box.new.normal_matches?(*boxes)
+      #   # => false
+      #   boxes.first.normal_matches?(*boxes)
+      #   # => true
+      #   Box.new.symbol_to_proc_matches?(*boxes)
+      #   # => NoMethodError: protected method `secret' called for #<Box...>
+      #   boxes.first.symbol_to_proc_matches?(*boxes)
+      #   # => NoMethodError: protected method `secret' called for #<Box...>
+      #   ----
+      #
       # @example
       #   # bad
       #   something.map { |s| s.upcase }
@@ -84,6 +120,23 @@ module RuboCop
       #   # good
       #   something.map { |s| s.upcase }
       #
+      # @example AllCops:ActiveSupportExtensionsEnabled: false (default)
+      #   # bad
+      #   ->(x) { x.foo }
+      #   proc { |x| x.foo }
+      #   Proc.new { |x| x.foo }
+      #
+      #   # good
+      #   lambda(&:foo)
+      #   proc(&:foo)
+      #   Proc.new(&:foo)
+      #
+      # @example AllCops:ActiveSupportExtensionsEnabled: true
+      #   # good
+      #   ->(x) { x.foo }
+      #   proc { |x| x.foo }
+      #   Proc.new { |x| x.foo }
+      #
       class SymbolProc < Base
         include CommentsHelp
         include RangeHelp
@@ -93,6 +146,7 @@ module RuboCop
 
         MSG = 'Pass `&:%<method>s` as an argument to `%<block_method>s` instead of a block.'
         SUPER_TYPES = %i[super zsuper].freeze
+        LAMBDA_OR_PROC = %i[lambda proc].freeze
 
         # @!method proc_node?(node)
         def_node_matcher :proc_node?, '(send (const {nil? cbase} :Proc) :new)'
@@ -115,13 +169,12 @@ module RuboCop
         # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def on_block(node)
           symbol_proc?(node) do |dispatch_node, arguments_node, method_name|
-            # TODO: Rails-specific handling that we should probably make
-            # configurable - https://github.com/rubocop/rubocop/issues/1485
-            # we should allow lambdas & procs
-            return if proc_node?(dispatch_node)
+            if active_support_extensions_enabled?
+              return if proc_node?(dispatch_node)
+              return if LAMBDA_OR_PROC.include?(dispatch_node.method_name)
+            end
             return if unsafe_hash_usage?(dispatch_node)
             return if unsafe_array_usage?(dispatch_node)
-            return if %i[lambda proc].include?(dispatch_node.method_name)
             return if allowed_method_name?(dispatch_node.method_name)
             return if allow_if_method_has_argument?(node.send_node)
             return if node.block_type? && destructuring_block_argument?(arguments_node)
@@ -170,6 +223,15 @@ module RuboCop
         end
 
         def autocorrect_without_args(corrector, node)
+          if node.send_node.lambda_literal?
+            if node.send_node.loc.selector.source == '->'
+              corrector.replace(node, "lambda(&:#{node.body.method_name})")
+              return
+            else
+              autocorrect_lambda_block(corrector, node)
+            end
+          end
+
           corrector.replace(block_range_with_space(node), "(&:#{node.body.method_name})")
         end
 
@@ -180,6 +242,14 @@ module RuboCop
           replacement = ",#{replacement}" unless arg_range.source.end_with?(',')
           corrector.insert_after(arg_range, replacement)
           corrector.remove(block_range_with_space(node))
+        end
+
+        def autocorrect_lambda_block(corrector, node)
+          send_node_loc = node.send_node.loc
+          corrector.replace(send_node_loc.selector, 'lambda')
+
+          range = range_between(send_node_loc.selector.end_pos, node.loc.begin.end_pos - 2)
+          corrector.remove(range)
         end
 
         def block_range_with_space(node)

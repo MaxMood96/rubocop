@@ -39,7 +39,7 @@ RSpec.describe RuboCop::Cop::Style::QuotedSymbols, :config do
     end
 
     it 'accepts double quotes with escape sequences' do
-      expect_no_offenses(<<~RUBY)
+      expect_no_offenses(<<~'RUBY')
         :"a\nb"
       RUBY
     end
@@ -141,7 +141,7 @@ RSpec.describe RuboCop::Cop::Style::QuotedSymbols, :config do
       RUBY
     end
 
-    context 'hash with hashrocket style' do
+    context 'hash with hash rocket style' do
       it 'accepts properly quoted symbols' do
         expect_no_offenses(<<~RUBY)
           { :'a' => value }
@@ -199,7 +199,7 @@ RSpec.describe RuboCop::Cop::Style::QuotedSymbols, :config do
     end
 
     it 'accepts double quotes with escape sequences' do
-      expect_no_offenses(<<~RUBY)
+      expect_no_offenses(<<~'RUBY')
         :"a\nb"
       RUBY
     end
@@ -269,7 +269,7 @@ RSpec.describe RuboCop::Cop::Style::QuotedSymbols, :config do
       RUBY
     end
 
-    context 'hash with hashrocket style' do
+    context 'hash with hash rocket style' do
       it 'accepts properly quoted symbols' do
         expect_no_offenses(<<~RUBY)
           { :"a" => value }

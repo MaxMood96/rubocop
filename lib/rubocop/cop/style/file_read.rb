@@ -6,8 +6,7 @@ module RuboCop
       # Favor `File.(bin)read` convenience methods.
       #
       # @example
-      #   ## text mode
-      #   # bad
+      #   # bad - text mode
       #   File.open(filename).read
       #   File.open(filename, &:read)
       #   File.open(filename) { |f| f.read }
@@ -23,9 +22,7 @@ module RuboCop
       #   # good
       #   File.read(filename)
       #
-      # @example
-      #   ## binary mode
-      #   # bad
+      #   # bad - binary mode
       #   File.open(filename, 'rb').read
       #   File.open(filename, 'rb', &:read)
       #   File.open(filename, 'rb') do |f|
@@ -63,7 +60,7 @@ module RuboCop
 
         # @!method block_read?(node)
         def_node_matcher :block_read?, <<~PATTERN
-          (block _ (args (arg $_)) (send (lvar $_) :read))
+          (block _ (args (arg _name)) (send (lvar _name) :read))
         PATTERN
 
         def on_send(node)
@@ -71,7 +68,7 @@ module RuboCop
             message = format(MSG, read_method: read_method(mode))
 
             add_offense(read_node, message: message) do |corrector|
-              range = range_between(node.loc.selector.begin_pos, read_node.loc.expression.end_pos)
+              range = range_between(node.loc.selector.begin_pos, read_node.source_range.end_pos)
               replacement = "#{read_method(mode)}(#{filename.source})"
 
               corrector.replace(range, replacement)
@@ -100,7 +97,7 @@ module RuboCop
         def file_open_read?(node)
           return true if send_read?(node)
 
-          block_read?(node) { |block_arg, read_lvar| block_arg == read_lvar }
+          block_read?(node)
         end
 
         def read_method(mode)

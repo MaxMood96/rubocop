@@ -6,12 +6,8 @@ module RuboCop
   # Common methods for finding files.
   # @api private
   module FileFinder
-    def self.root_level=(level)
-      @root_level = level
-    end
-
-    def self.root_level?(path, stop_dir)
-      (@root_level || stop_dir) == path.to_s
+    class << self
+      attr_accessor :root_level
     end
 
     def find_file_upwards(filename, start_dir, stop_dir = nil)
@@ -27,14 +23,20 @@ module RuboCop
       last_file
     end
 
+    def traverse_directories_upwards(start_dir, stop_dir = nil)
+      Pathname.new(start_dir).expand_path.ascend do |dir|
+        yield(dir)
+        dir = dir.to_s
+        break if dir == stop_dir || dir == FileFinder.root_level
+      end
+    end
+
     private
 
     def traverse_files_upwards(filename, start_dir, stop_dir)
-      Pathname.new(start_dir).expand_path.ascend do |dir|
+      traverse_directories_upwards(start_dir, stop_dir) do |dir|
         file = dir + filename
         yield(file.to_s) if file.exist?
-
-        break if FileFinder.root_level?(dir, stop_dir)
       end
     end
   end

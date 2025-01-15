@@ -94,20 +94,18 @@ module RuboCop
         private
 
         def allowed_gem?(node)
-          allowed_gems.include?(node.first_argument.value)
+          allowed_gems.include?(node.first_argument.str_content)
         end
 
         def allowed_gems
           Array(cop_config['AllowedGems'])
         end
 
-        def message(range)
-          gem_specification = range.source
-
+        def message(_range)
           if required_style?
-            format(REQUIRED_MSG, gem_specification: gem_specification)
+            REQUIRED_MSG
           elsif forbidden_style?
-            format(FORBIDDEN_MSG, gem_specification: gem_specification)
+            FORBIDDEN_MSG
           end
         end
 
@@ -126,13 +124,13 @@ module RuboCop
         end
 
         def required_offense?(node)
-          return unless required_style?
+          return false unless required_style?
 
           !includes_version_specification?(node) && !includes_commit_reference?(node)
         end
 
         def forbidden_offense?(node)
-          return unless forbidden_style?
+          return false unless forbidden_style?
 
           includes_version_specification?(node) || includes_commit_reference?(node)
         end

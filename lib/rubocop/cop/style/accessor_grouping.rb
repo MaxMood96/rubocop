@@ -10,22 +10,29 @@ module RuboCop
       # NOTE: If there is a method call before the accessor method it is always allowed
       # as it might be intended like Sorbet.
       #
+      # NOTE: If there is a RBS::Inline annotation comment just after the accessor method
+      # it is always allowed.
+      #
       # @example EnforcedStyle: grouped (default)
       #   # bad
       #   class Foo
       #     attr_reader :bar
+      #     attr_reader :bax
       #     attr_reader :baz
       #   end
       #
       #   # good
       #   class Foo
-      #     attr_reader :bar, :baz
+      #     attr_reader :bar, :bax, :baz
       #   end
       #
       #   # good
       #   class Foo
       #     # may be intended comment for bar.
       #     attr_reader :bar
+      #
+      #     sig { returns(String) }
+      #     attr_reader :bax
       #
       #     may_be_intended_annotation :baz
       #     attr_reader :baz
@@ -66,7 +73,7 @@ module RuboCop
 
         def check(send_node)
           return if previous_line_comment?(send_node) || !groupable_accessor?(send_node)
-          return unless (grouped_style? && sibling_accessors(send_node).size > 1) ||
+          return unless (grouped_style? && groupable_sibling_accessors(send_node).size > 1) ||
                         (separated_style? && send_node.arguments.size > 1)
 
           message = message(send_node)
@@ -79,7 +86,7 @@ module RuboCop
           if (preferred_accessors = preferred_accessors(node))
             corrector.replace(node, preferred_accessors)
           else
-            range = range_with_surrounding_space(node.loc.expression, side: :left)
+            range = range_with_surrounding_space(node.source_range, side: :left)
             corrector.remove(range)
           end
         end
@@ -88,12 +95,29 @@ module RuboCop
           comment_line?(processed_source[node.first_line - 2])
         end
 
+        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def groupable_accessor?(node)
           return true unless (previous_expression = node.left_siblings.last)
+
+          # Accessors with Sorbet `sig { ... }` blocks shouldn't be groupable.
+          if previous_expression.block_type?
+            previous_expression.child_nodes.each do |child_node|
+              break previous_expression = child_node if child_node.send_type?
+            end
+          end
+
           return true unless previous_expression.send_type?
 
-          previous_expression.attribute_accessor? || previous_expression.access_modifier?
+          # Accessors with RBS::Inline annotations shouldn't be groupable.
+          return false if processed_source.comments.any? do |c|
+            same_line?(c, previous_expression) && c.text.start_with?('#:')
+          end
+
+          previous_expression.attribute_accessor? ||
+            previous_expression.access_modifier? ||
+            node.first_line - previous_expression.last_line > 1 # there is a space between nodes
         end
+        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
         def class_send_elements(class_node)
           class_def = class_node.body
@@ -115,12 +139,12 @@ module RuboCop
           style == :separated
         end
 
-        def sibling_accessors(send_node)
+        def groupable_sibling_accessors(send_node)
           send_node.parent.each_child_node(:send).select do |sibling|
             sibling.attribute_accessor? &&
               sibling.method?(send_node.method_name) &&
               node_visibility(sibling) == node_visibility(send_node) &&
-              !previous_line_comment?(sibling)
+              groupable_accessor?(sibling) && !previous_line_comment?(sibling)
           end
         end
 
@@ -131,7 +155,7 @@ module RuboCop
 
         def preferred_accessors(node)
           if grouped_style?
-            accessors = sibling_accessors(node)
+            accessors = groupable_sibling_accessors(node)
             group_accessors(node, accessors) if node.loc == accessors.first.loc
           else
             separate_accessors(node)
@@ -150,7 +174,7 @@ module RuboCop
               *processed_source.ast_with_comments[arg].map(&:text),
               "#{node.method_name} #{arg.source}"
             ]
-            if arg == node.arguments.first
+            if arg == node.first_argument
               lines
             else
               indent = ' ' * node.loc.column

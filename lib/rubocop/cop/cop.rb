@@ -22,6 +22,14 @@ module RuboCop
         end
       end
 
+      def self.inherited(_subclass)
+        super
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          Inheriting from `RuboCop::Cop::Cop` is deprecated. Use `RuboCop::Cop::Base` instead.
+          For more information, see https://docs.rubocop.org/rubocop/v1_upgrade_notes.html.
+        WARNING
+      end
+
       def self.support_autocorrect?
         method_defined?(:autocorrect)
       end
@@ -37,16 +45,28 @@ module RuboCop
 
       # @deprecated Use Registry.global
       def self.registry
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          `Cop.registry` is deprecated. Use `Registry.global` instead.
+        WARNING
+
         Registry.global
       end
 
       # @deprecated Use Registry.all
       def self.all
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          `Cop.all` is deprecated. Use `Registry.all` instead.
+        WARNING
+
         Registry.all
       end
 
       # @deprecated Use Registry.qualified_cop_name
       def self.qualified_cop_name(name, origin)
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          `Cop.qualified_cop_name` is deprecated. Use `Registry.qualified_cop_name` instead.
+        WARNING
+
         Registry.qualified_cop_name(name, origin)
       end
 
@@ -58,7 +78,7 @@ module RuboCop
         # template file, we convert it to location info in the original file.
         range = range_for_original(range)
 
-        if block.nil? && !support_autocorrect?
+        if block.nil? && !self.class.support_autocorrect?
           super(range, message: message, severity: severity)
         else
           super(range, message: message, severity: severity) do |corrector|
@@ -74,13 +94,19 @@ module RuboCop
 
       # @deprecated Use class method
       def support_autocorrect?
-        # warn 'deprecated, use cop.class.support_autocorrect?' TODO
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          `support_autocorrect?` is deprecated. Use `cop.class.support_autocorrect?`.
+        WARNING
+
         self.class.support_autocorrect?
       end
 
       # @deprecated
       def corrections
-        # warn 'Cop#corrections is deprecated' TODO
+        warn Rainbow(<<~WARNING).yellow, uplevel: 1
+          `Cop#corrections` is deprecated.
+        WARNING
+
         return [] unless @last_corrector
 
         Legacy::CorrectionsProxy.new(@last_corrector)
@@ -136,12 +162,12 @@ module RuboCop
       end
 
       def correction_lambda
-        return unless support_autocorrect?
+        return unless self.class.support_autocorrect?
 
-        dedup_on_node(@v0_argument) { autocorrect(@v0_argument) }
+        dedupe_on_node(@v0_argument) { autocorrect(@v0_argument) }
       end
 
-      def dedup_on_node(node)
+      def dedupe_on_node(node)
         @corrected_nodes ||= {}.compare_by_identity
         yield unless @corrected_nodes.key?(node)
       ensure

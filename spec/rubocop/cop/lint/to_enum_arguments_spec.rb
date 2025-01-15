@@ -104,11 +104,18 @@ RSpec.describe RuboCop::Cop::Lint::ToEnumArguments, :config do
     RUBY
   end
 
-  it 'registers an offense when enumerator is created for another method' do
-    expect_offense(<<~RUBY)
+  it 'does not register an offense when enumerator is created for another method' do
+    expect_no_offenses(<<~RUBY)
       def m(x)
         return to_enum(:not_m) unless block_given?
-               ^^^^^^^^^^^^^^^ Ensure you correctly provided all the arguments.
+      end
+    RUBY
+  end
+
+  it 'does not register an offense when enumerator is created for another method in no arguments method definition' do
+    expect_no_offenses(<<~RUBY)
+      def m
+        return to_enum(:not_m) unless block_given?
       end
     RUBY
   end
@@ -163,6 +170,30 @@ RSpec.describe RuboCop::Cop::Lint::ToEnumArguments, :config do
       expect_no_offenses(<<~RUBY)
         def m(...)
           return to_enum(:m, ...) unless block_given?
+        end
+      RUBY
+    end
+  end
+
+  context 'anonymous positional arguments forwarding', :ruby32 do
+    it 'does not register an offense when enumerator is created with the correct arguments' do
+      expect_no_offenses(<<~RUBY)
+        def do_something(*)
+          return to_enum(:do_something, *) unless block_given?
+
+          do_something_else
+        end
+      RUBY
+    end
+  end
+
+  context 'anonymous keyword arguments forwarding', :ruby32 do
+    it 'does not register an offense when enumerator is created with the correct arguments' do
+      expect_no_offenses(<<~RUBY)
+        def do_something(**)
+          return to_enum(:do_something, **) unless block_given?
+
+          do_something_else
         end
       RUBY
     end

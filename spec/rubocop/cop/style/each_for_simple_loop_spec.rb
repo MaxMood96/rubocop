@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 RSpec.describe RuboCop::Cop::Style::EachForSimpleLoop, :config do
-  it 'does not register offense if range startpoint is not constant' do
+  it 'does not register offense if range starting point is not constant' do
     expect_no_offenses('(a..10).each {}')
   end
 
@@ -9,31 +9,101 @@ RSpec.describe RuboCop::Cop::Style::EachForSimpleLoop, :config do
     expect_no_offenses('(0..b).each {}')
   end
 
-  context 'with inline block with parameters' do
+  context 'with inline block with no parameters' do
     it 'autocorrects an offense' do
       expect_offense(<<~RUBY)
-        (0...10).each { |n| }
+        (0...10).each { do_something }
         ^^^^^^^^^^^^^ Use `Integer#times` for a simple loop which iterates a fixed number of times.
       RUBY
 
       expect_correction(<<~RUBY)
-        10.times { |n| }
+        10.times { do_something }
+      RUBY
+    end
+  end
+
+  context 'with inline block with parameters' do
+    it 'does not register an offense' do
+      expect_no_offenses(<<~RUBY)
+        (0...10).each { |n| do_something(n) }
+      RUBY
+    end
+  end
+
+  context 'with multiline block with no parameters' do
+    it 'autocorrects an offense' do
+      expect_offense(<<~RUBY)
+        (0...10).each do
+        ^^^^^^^^^^^^^ Use `Integer#times` for a simple loop which iterates a fixed number of times.
+          do_something
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        10.times do
+          do_something
+        end
       RUBY
     end
   end
 
   context 'with multiline block with parameters' do
-    it 'autocorrects an offense' do
-      expect_offense(<<~RUBY)
+    it 'does not register an offense' do
+      expect_no_offenses(<<~RUBY)
         (0...10).each do |n|
-        ^^^^^^^^^^^^^ Use `Integer#times` for a simple loop which iterates a fixed number of times.
+          do_something(n)
         end
       RUBY
+    end
+  end
 
-      expect_correction(<<~RUBY)
-        10.times do |n|
-        end
-      RUBY
+  context 'when using safe navigation operator' do
+    context 'with inline block with no parameters' do
+      it 'autocorrects an offense' do
+        expect_offense(<<~RUBY)
+          (0...10)&.each { do_something }
+          ^^^^^^^^^^^^^^ Use `Integer#times` for a simple loop which iterates a fixed number of times.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          10.times { do_something }
+        RUBY
+      end
+    end
+
+    context 'with inline block with parameters' do
+      it 'does not register an offense' do
+        expect_no_offenses(<<~RUBY)
+          (0...10)&.each { |n| do_something(n) }
+        RUBY
+      end
+    end
+
+    context 'with multiline block with no parameters' do
+      it 'autocorrects an offense' do
+        expect_offense(<<~RUBY)
+          (0...10)&.each do
+          ^^^^^^^^^^^^^^ Use `Integer#times` for a simple loop which iterates a fixed number of times.
+            do_something
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          10.times do
+            do_something
+          end
+        RUBY
+      end
+    end
+
+    context 'with multiline block with parameters' do
+      it 'does not register an offense' do
+        expect_no_offenses(<<~RUBY)
+          (0...10)&.each do |n|
+            do_something(n)
+          end
+        RUBY
+      end
     end
   end
 
@@ -77,6 +147,21 @@ RSpec.describe RuboCop::Cop::Style::EachForSimpleLoop, :config do
         5.times do
         end
       RUBY
+    end
+
+    context 'when using safe navigation operator' do
+      it 'autocorrects the range not starting with zero' do
+        expect_offense(<<~RUBY)
+          (3..7)&.each do
+          ^^^^^^^^^^^^ Use `Integer#times` for a simple loop which iterates a fixed number of times.
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          5.times do
+          end
+        RUBY
+      end
     end
 
     it 'does not register offense for range not starting with zero and using param' do

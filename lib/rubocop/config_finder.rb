@@ -17,8 +17,8 @@ module RuboCop
       attr_writer :project_root
 
       def find_config_path(target_dir)
-        find_project_dotfile(target_dir) || find_user_dotfile || find_user_xdg_config ||
-          DEFAULT_FILE
+        find_project_dotfile(target_dir) || find_project_root_dot_config ||
+          find_user_dotfile || find_user_xdg_config || DEFAULT_FILE
       end
 
       # Returns the path RuboCop inferred as the root of the project. No file
@@ -41,19 +41,29 @@ module RuboCop
         find_file_upwards(DOTFILE, target_dir, project_root)
       end
 
+      def find_project_root_dot_config
+        return unless project_root
+
+        dotfile = File.join(project_root, '.config', DOTFILE)
+        return dotfile if File.exist?(dotfile)
+
+        xdg_config = File.join(project_root, '.config', 'rubocop', XDG_CONFIG)
+        xdg_config if File.exist?(xdg_config)
+      end
+
       def find_user_dotfile
         return unless ENV.key?('HOME')
 
         file = File.join(Dir.home, DOTFILE)
 
-        return file if File.exist?(file)
+        file if File.exist?(file)
       end
 
       def find_user_xdg_config
         xdg_config_home = expand_path(ENV.fetch('XDG_CONFIG_HOME', '~/.config'))
         xdg_config = File.join(xdg_config_home, 'rubocop', XDG_CONFIG)
 
-        return xdg_config if File.exist?(xdg_config)
+        xdg_config if File.exist?(xdg_config)
       end
 
       def expand_path(path)

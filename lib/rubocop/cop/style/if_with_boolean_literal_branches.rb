@@ -44,7 +44,6 @@ module RuboCop
       #   # good
       #   foo == bar
       #
-      # @example
       #   # bad
       #   if foo.do_something?
       #     true
@@ -112,12 +111,16 @@ module RuboCop
         end
 
         def message(node, keyword)
-          message_template = node.elsif? ? MSG_FOR_ELSIF : MSG
-
-          format(message_template, keyword: keyword)
+          if node.elsif?
+            MSG_FOR_ELSIF
+          else
+            format(MSG, keyword: keyword)
+          end
         end
 
         def return_boolean_value?(condition)
+          return false unless condition
+
           if condition.begin_type?
             return_boolean_value?(condition.children.first)
           elsif condition.or_type?
@@ -152,8 +155,7 @@ module RuboCop
         end
 
         def require_parentheses?(condition)
-          condition.and_type? || condition.or_type? ||
-            (condition.send_type? && condition.comparison_method?)
+          condition.operator_keyword? || (condition.send_type? && condition.comparison_method?)
         end
       end
     end

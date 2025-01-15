@@ -15,7 +15,7 @@ AllCops:
     - 'tmp/**/*'
     - '.git/**/*'
     - 'bin/*'
-  TargetRubyVersion: 2.6
+  TargetRubyVersion: 2.7
   SuggestExtensions: false
 
 Naming/PredicateName:
@@ -41,6 +41,10 @@ Style/IpAddresses:
   # The test for this cop includes strings that would cause offenses
   Exclude:
     - spec/rubocop/cop/style/ip_addresses_spec.rb
+
+Style/ReturnNilInPredicateMethodDefinition:
+  AllowedMethods:
+    - on_defined? # rubocop-ast node handler
 
 Layout/EndOfLine:
   EnforcedStyle: lf
@@ -90,7 +94,6 @@ Metrics/BlockLength:
     - 'Rakefile'
     - '**/*.rake'
     - 'spec/**/*.rb'
-    - '**/*.gemspec'
 
 Metrics/ClassLength:
   Exclude:
@@ -108,6 +111,9 @@ Naming/InclusiveLanguage:
     ' a offense':
       Suggestions:
         - an offense
+    ' and offense':
+      Suggestions:
+        - ' an offense'
     auto-correct:
       Suggestions:
         - autocorrect
@@ -123,6 +129,21 @@ Naming/InclusiveLanguage:
     'does not registers':
       Suggestions:
         - does not register
+    'register no offense':
+      Suggestions:
+        - registers no offense
+    'register an error':
+      Suggestions:
+        - register an offense
+    'registers an error':
+      Suggestions:
+        - registers an offense
+    'does not register and corrects':
+      Suggestions:
+        does not register
+    'does not register an offense and corrects':
+      Suggestions:
+        does not register an offense
   Exclude:
     - lib/rubocop/cop/naming/inclusive_language.rb
     - lib/rubocop/cop/mixin/auto_corrector.rb
@@ -139,13 +160,17 @@ RSpec:
       - expect_no_offenses
       - expect_offense
 
-RSpec/FilePath:
-  Exclude:
-    - spec/rubocop/cop/internal_affairs/redundant_let_rubocop_config_new_spec.rb
-    - spec/rubocop/formatter/junit_formatter_spec.rb
-
 RSpec/PredicateMatcher:
-  EnforcedStyle: explicit
+  # Also consider `be(true)` and `be(false)` as offenses, instead of only `be_truthy` and `be_falsy`
+  Strict: false
+
+RSpec/SpecFilePathFormat:
+  CustomTransform:
+    GitHubActionsFormatter: github_actions_formatter
+    JUnitFormatter: junit_formatter
+    RedundantLetRuboCopConfigNew: redundant_let_rubocop_config_new
+  Exclude:
+    - spec/rubocop/cop/mixin/enforce_superclass_spec.rb
 
 RSpec/MessageSpies:
   EnforcedStyle: receive

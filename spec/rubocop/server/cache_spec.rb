@@ -69,7 +69,7 @@ RSpec.describe RuboCop::Server::Cache do
         end
       end
 
-      context 'when cache root path is not specified path and `XDG_CACHE_HOME` environment variable is spacified' do
+      context 'when cache root path is not specified path and `XDG_CACHE_HOME` environment variable is specified' do
         let(:cache_path) { File.join('/tmp/cache-root-directory', 'rubocop_cache', 'server') }
 
         around do |example|
@@ -281,7 +281,25 @@ RSpec.describe RuboCop::Server::Cache do
           described_class.dir.rmtree # server stopping behavior
           result
         end
-        expect(described_class.pid_running?).to be(false)
+        expect(described_class).not_to be_pid_running
+      end
+
+      it 'works properly when insufficient permissions to server cache dir are granted' do
+        expect(described_class).to receive(:pid_path).and_wrap_original do |method|
+          result = method.call
+          described_class.dir.chmod(0o644) # Make insufficient permissions.
+          result
+        end
+        expect(described_class).not_to be_pid_running
+      end
+
+      it 'works properly when the file system is read-only' do
+        expect(described_class).to receive(:pid_path).and_wrap_original do |method|
+          result = method.call
+          allow(result).to receive(:read).and_raise(Errno::EROFS)
+          result
+        end
+        expect(described_class).not_to be_pid_running
       end
     end
   end

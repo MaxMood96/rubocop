@@ -111,6 +111,7 @@ module RuboCop
         source
       end
 
+      # rubocop:disable Metrics/AbcSize
       def expect_offense(source, file = nil, severity: nil, chomp: false, **replacements)
         expected_annotations = parse_annotations(source, **replacements)
         source = expected_annotations.plain_source
@@ -123,10 +124,17 @@ module RuboCop
         expect(actual_annotations).to eq(expected_annotations), ''
         expect(@offenses.map(&:severity).uniq).to eq([severity]) if severity
 
+        # Validate that all offenses have a range that formatters can display
+        expect do
+          @offenses.each { |offense| offense.location.source_line }
+        end.not_to raise_error, 'One of the offenses has a misconstructed range, for ' \
+                                'example if the offense is on line 1 and the source is empty'
+
         @offenses
       end
+      # rubocop:enable Metrics/AbcSize
 
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity
       def expect_correction(correction, loop: true, source: nil)
         if source
           expected_annotations = parse_annotations(source, raise_error: false)
@@ -148,7 +156,6 @@ module RuboCop
 
           break corrected_source unless loop
           break corrected_source if @last_corrector.empty?
-          break corrected_source if corrected_source == @processed_source.buffer.source
 
           if iteration > RuboCop::Runner::MAX_ITERATIONS
             raise RuboCop::Runner::InfiniteCorrectionLoop.new(@processed_source.path, [@offenses])
@@ -162,20 +169,22 @@ module RuboCop
         raise 'Expected correction but no corrections were made' if new_source == source
 
         expect(new_source).to eq(correction)
+        expect(@processed_source).to be_valid_syntax, 'Expected correction to be valid syntax'
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity
 
       def expect_no_corrections
         raise '`expect_no_corrections` must follow `expect_offense`' unless @processed_source
 
         return if @last_corrector.empty?
 
-        # In order to print a nice diff, e.g. what source got corrected to,
-        # we need to run the actual corrections
-
+        # This is just here for a pretty diff if the source actually got changed
         new_source = @last_corrector.rewrite
-
         expect(new_source).to eq(@processed_source.buffer.source)
+
+        # There is an infinite loop if a corrector is present that did not make
+        # any changes. It will cause the same offense/correction on the next loop.
+        raise RuboCop::Runner::InfiniteCorrectionLoop.new(@processed_source.path, [@offenses])
       end
 
       def expect_no_offenses(source, file = nil)
@@ -212,7 +221,7 @@ module RuboCop
 
       # Parsed representation of code annotated with the `^^^ Message` style
       class AnnotatedSource
-        ANNOTATION_PATTERN = /\A\s*(\^+|\^{}) /.freeze
+        ANNOTATION_PATTERN = /\A\s*(\^+|\^{}) ?/.freeze
         ABBREV = "[...]\n"
 
         # @param annotated_source [String] string passed to the matchers

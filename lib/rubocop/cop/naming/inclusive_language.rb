@@ -5,6 +5,7 @@ module RuboCop
     module Naming
       # Recommends the use of inclusive language instead of problematic terms.
       # The cop can check the following locations for offenses:
+      #
       # - identifiers
       # - constants
       # - variables
@@ -12,6 +13,7 @@ module RuboCop
       # - symbols
       # - comments
       # - file paths
+      #
       # Each of these locations can be individually enabled/disabled via configuration,
       # for example CheckIdentifiers = true/false.
       #
@@ -21,6 +23,9 @@ module RuboCop
       # An AllowedRegex can be specified for a flagged term to exempt allowed uses of the term.
       # `WholeWord: true` can be set on a flagged term to indicate the cop should only match when
       # a term matches the whole word (partial matches will not be offenses).
+      #
+      # The cop supports autocorrection when there is only one suggestion. When there are multiple
+      # suggestions, the best suggestion cannot be identified and will not be autocorrected.
       #
       # @example FlaggedTerms: { whitelist: { Suggestions: ['allowlist'] } }
       #   # Suggest replacing identifier whitelist with allowlist
@@ -68,6 +73,7 @@ module RuboCop
       #   TeslaVehicle
       class InclusiveLanguage < Base
         include RangeHelp
+        extend AutoCorrector
 
         EMPTY_ARRAY = [].freeze
         MSG = "Consider replacing '%<term>s'%<suffix>s."
@@ -92,7 +98,7 @@ module RuboCop
         private
 
         def investigate_tokens
-          processed_source.each_token do |token|
+          processed_source.tokens.each do |token|
             next unless check_token?(token.type)
 
             word_locations = scan_for_words(token.text)
@@ -104,9 +110,16 @@ module RuboCop
 
         def add_offenses_for_token(token, word_locations)
           word_locations.each do |word_location|
-            start_position = token.pos.begin_pos + token.pos.source.index(word_location.word)
-            range = range_between(start_position, start_position + word_location.word.length)
-            add_offense(range, message: create_message(word_location.word))
+            word = word_location.word
+            range = offense_range(token, word)
+
+            add_offense(range, message: create_message(word)) do |corrector|
+              suggestions = find_flagged_term(word)['Suggestions']
+
+              if (preferred_term = preferred_sole_term(suggestions))
+                corrector.replace(range, preferred_term)
+              end
+            end
           end
         end
 
@@ -142,6 +155,15 @@ module RuboCop
           end
 
           set_regexes(flagged_term_strings, allowed_strings)
+        end
+
+        def preferred_sole_term(suggestions)
+          case suggestions
+          when Array
+            suggestions.one? && preferred_sole_term(suggestions.first)
+          when String
+            suggestions
+          end
         end
 
         def extract_regexp(term, term_definition)
@@ -194,8 +216,7 @@ module RuboCop
             message = create_multiple_word_message_for_file(words)
           end
 
-          range = source_range(processed_source.buffer, 1, 0)
-          add_offense(range, message: message)
+          add_global_offense(message)
         end
 
         def create_single_word_message_for_file(word)
@@ -263,6 +284,12 @@ module RuboCop
                              quoted_suggestions.join(', ')
                            end
           " with #{suggestion_str}"
+        end
+
+        def offense_range(token, word)
+          start_position = token.pos.begin_pos + token.pos.source.index(word)
+
+          range_between(start_position, start_position + word.length)
         end
       end
     end

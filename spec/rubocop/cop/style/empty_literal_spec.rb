@@ -2,37 +2,26 @@
 
 RSpec.describe RuboCop::Cop::Style::EmptyLiteral, :config do
   describe 'Empty Array' do
-    it 'registers an offense for Array.new()' do
-      expect_offense(<<~RUBY)
-        test = Array.new()
-               ^^^^^^^^^^^ Use array literal `[]` instead of `Array.new`.
-      RUBY
+    shared_examples 'registers_and_corrects' do |initializer:|
+      it "registers an offense for #{initializer}" do
+        expect_offense(<<~RUBY)
+          test = #{initializer}
+                 #{'^' * initializer.length} Use array literal `[]` instead of `#{initializer}`.
+        RUBY
 
-      expect_correction(<<~RUBY)
-        test = []
-      RUBY
+        expect_correction(<<~RUBY)
+          test = []
+        RUBY
+      end
     end
 
-    it 'registers an offense for Array.new' do
-      expect_offense(<<~RUBY)
-        test = Array.new
-               ^^^^^^^^^ Use array literal `[]` instead of `Array.new`.
-      RUBY
-
-      expect_correction(<<~RUBY)
-        test = []
-      RUBY
-    end
-
-    it 'registers an offense for ::Array.new' do
-      expect_offense(<<~RUBY)
-        test = ::Array.new
-               ^^^^^^^^^^^ Use array literal `[]` instead of `Array.new`.
-      RUBY
-
-      expect_correction(<<~RUBY)
-        test = []
-      RUBY
+    context 'initializer resulting in an empty array literal' do
+      it_behaves_like 'registers_and_corrects', initializer: 'Array.new()'
+      it_behaves_like 'registers_and_corrects', initializer: 'Array.new'
+      it_behaves_like 'registers_and_corrects', initializer: '::Array.new()'
+      it_behaves_like 'registers_and_corrects', initializer: 'Array.new([])'
+      it_behaves_like 'registers_and_corrects', initializer: 'Array[]'
+      it_behaves_like 'registers_and_corrects', initializer: 'Array([])'
     end
 
     it 'does not register an offense for Array.new(3)' do
@@ -61,40 +50,44 @@ RSpec.describe RuboCop::Cop::Style::EmptyLiteral, :config do
     it 'does not register Array.new with block in other block' do
       expect_no_offenses('puts { Array.new { 1 } }')
     end
+
+    it 'does not register an offense for Array[3]' do
+      expect_no_offenses('Array[3]')
+    end
+
+    it 'does not register an offense for Array [3]' do
+      expect_no_offenses('Array [3]')
+    end
   end
 
   describe 'Empty Hash' do
-    it 'registers an offense for Hash.new()' do
-      expect_offense(<<~RUBY)
-        test = Hash.new()
-               ^^^^^^^^^^ Use hash literal `{}` instead of `Hash.new`.
-      RUBY
+    shared_examples 'registers_and_corrects' do |initializer:|
+      it "registers an offense for #{initializer}" do
+        expect_offense(<<~RUBY)
+          test = #{initializer}
+                 #{'^' * initializer.length} Use hash literal `{}` instead of `#{initializer}`.
+        RUBY
 
-      expect_correction(<<~RUBY)
-        test = {}
-      RUBY
+        expect_correction(<<~RUBY)
+          test = {}
+        RUBY
+      end
     end
 
-    it 'registers an offense for Hash.new' do
-      expect_offense(<<~RUBY)
-        test = Hash.new
-               ^^^^^^^^ Use hash literal `{}` instead of `Hash.new`.
-      RUBY
-
-      expect_correction(<<~RUBY)
-        test = {}
-      RUBY
+    context 'initializer resulting in an empty hash literal' do
+      it_behaves_like 'registers_and_corrects', initializer: 'Hash.new()'
+      it_behaves_like 'registers_and_corrects', initializer: 'Hash.new'
+      it_behaves_like 'registers_and_corrects', initializer: '::Hash.new()'
+      it_behaves_like 'registers_and_corrects', initializer: 'Hash[]'
+      it_behaves_like 'registers_and_corrects', initializer: 'Hash([])'
     end
 
-    it 'registers an offense for ::Hash.new' do
-      expect_offense(<<~RUBY)
-        test = ::Hash.new
-               ^^^^^^^^^^ Use hash literal `{}` instead of `Hash.new`.
-      RUBY
+    it 'does not register an offense for Hash[3,4]' do
+      expect_no_offenses('Hash[3,4]')
+    end
 
-      expect_correction(<<~RUBY)
-        test = {}
-      RUBY
+    it 'does not register an offense for Hash [3,4]' do
+      expect_no_offenses('Hash [3,4]')
     end
 
     it 'does not register an offense for Hash.new(3)' do
@@ -111,6 +104,10 @@ RSpec.describe RuboCop::Cop::Style::EmptyLiteral, :config do
 
     it 'does not register an offense for ::Hash.new { block }' do
       expect_no_offenses('test = ::Hash.new { block }')
+    end
+
+    it 'does not register an offense for Hash.new([])' do
+      expect_no_offenses('Hash.new([])')
     end
 
     context 'Ruby 2.7', :ruby27 do
@@ -207,7 +204,7 @@ RSpec.describe RuboCop::Cop::Style::EmptyLiteral, :config do
   end
 
   describe 'Empty String', :config do
-    let(:other_cops) { { 'Style/FrozenStringLiteral' => { 'Enabled' => false } } }
+    let(:other_cops) { { 'Style/FrozenStringLiteralComment' => { 'Enabled' => false } } }
 
     it 'registers an offense for String.new()' do
       expect_offense(<<~RUBY)
@@ -287,8 +284,8 @@ RSpec.describe RuboCop::Cop::Style::EmptyLiteral, :config do
       end
     end
 
-    context 'when Style/FrozenStringLiteral is enabled' do
-      let(:other_cops) { { 'Style/FrozenStringLiteral' => { 'Enabled' => true } } }
+    context 'when Style/FrozenStringLiteralComment is enabled' do
+      let(:other_cops) { { 'Style/FrozenStringLiteralComment' => { 'Enabled' => true } } }
 
       context 'and there is no magic comment' do
         it 'does not register an offense' do
@@ -300,6 +297,87 @@ RSpec.describe RuboCop::Cop::Style::EmptyLiteral, :config do
 
       context 'and there is a frozen_string_literal: false comment' do
         it 'registers an offense and corrects' do
+          expect_offense(<<~RUBY)
+            # frozen_string_literal: false
+            test = String.new
+                   ^^^^^^^^^^ Use string literal `''` instead of `String.new`.
+          RUBY
+
+          expect_correction(<<~RUBY)
+            # frozen_string_literal: false
+            test = ''
+          RUBY
+        end
+      end
+    end
+
+    context 'when `AllCops/StringLiteralsFrozenByDefault: true`' do
+      let(:config) do
+        RuboCop::Config.new('AllCops' => { 'StringLiteralsFrozenByDefault' => true })
+      end
+
+      context 'when the frozen string literal comment is missing' do
+        it 'registers no offense' do
+          expect_no_offenses(<<~RUBY)
+            test = String.new
+          RUBY
+        end
+      end
+
+      context 'when the frozen string literal comment is true' do
+        it 'registers no offense' do
+          expect_no_offenses(<<~RUBY)
+            # frozen_string_literal: true
+              test = String.new
+          RUBY
+        end
+      end
+
+      context 'when the frozen string literal comment is false' do
+        it 'registers an offense' do
+          expect_offense(<<~RUBY)
+            # frozen_string_literal: false
+            test = String.new
+                   ^^^^^^^^^^ Use string literal `''` instead of `String.new`.
+          RUBY
+
+          expect_correction(<<~RUBY)
+            # frozen_string_literal: false
+            test = ''
+          RUBY
+        end
+      end
+    end
+
+    context 'when `AllCops/StringLiteralsFrozenByDefault: false`' do
+      let(:config) do
+        RuboCop::Config.new('AllCops' => { 'StringLiteralsFrozenByDefault' => false })
+      end
+
+      context 'when the frozen string literal comment is missing' do
+        it 'registers an offense' do
+          expect_offense(<<~RUBY)
+            test = String.new
+                   ^^^^^^^^^^ Use string literal `''` instead of `String.new`.
+          RUBY
+
+          expect_correction(<<~RUBY)
+            test = ''
+          RUBY
+        end
+      end
+
+      context 'when the frozen string literal comment is true' do
+        it 'registers no offense' do
+          expect_no_offenses(<<~RUBY)
+            # frozen_string_literal: true
+              test = String.new
+          RUBY
+        end
+      end
+
+      context 'when the frozen string literal comment is false' do
+        it 'registers an offense' do
           expect_offense(<<~RUBY)
             # frozen_string_literal: false
             test = String.new

@@ -17,24 +17,24 @@ module RuboCop
       #
       # @example
       #   # bad
-      #   if some_var = true
+      #   if some_var = value
       #     do_something
       #   end
       #
       #   # good
-      #   if some_var == true
+      #   if some_var == value
       #     do_something
       #   end
       #
       # @example AllowSafeAssignment: true (default)
       #   # good
-      #   if (some_var = true)
+      #   if (some_var = value)
       #     do_something
       #   end
       #
       # @example AllowSafeAssignment: false
       #   # bad
-      #   if (some_var = true)
+      #   if (some_var = value)
       #     do_something
       #   end
       #
@@ -50,7 +50,7 @@ module RuboCop
         MSG_WITHOUT_SAFE_ASSIGNMENT_ALLOWED =
           'Use `==` if you meant to do a comparison or move the assignment ' \
           'up out of the condition.'
-        ASGN_TYPES = [:begin, *AST::Node::EQUALS_ASSIGNMENTS, :send].freeze
+        ASGN_TYPES = [:begin, *AST::Node::EQUALS_ASSIGNMENTS, :send, :csend].freeze
 
         def on_if(node)
           return if node.condition.block_type?
@@ -88,7 +88,7 @@ module RuboCop
         end
 
         def skip_children?(asgn_node)
-          (asgn_node.send_type? && !asgn_node.assignment_method?) ||
+          (asgn_node.call_type? && !asgn_node.assignment_method?) ||
             empty_condition?(asgn_node) ||
             (safe_assignment_allowed? && safe_assignment?(asgn_node))
         end

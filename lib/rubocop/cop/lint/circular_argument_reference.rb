@@ -8,47 +8,40 @@ module RuboCop
       #
       # This cop mirrors a warning produced by MRI since 2.2.
       #
+      # NOTE: This syntax is no longer valid on Ruby 2.7 or higher.
+      #
       # @example
       #
       #   # bad
-      #
       #   def bake(pie: pie)
       #     pie.heat_up
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   def bake(pie:)
       #     pie.refrigerate
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   def bake(pie: self.pie)
       #     pie.feed_to(user)
       #   end
       #
-      # @example
-      #
       #   # bad
-      #
       #   def cook(dry_ingredients = dry_ingredients)
       #     dry_ingredients.reduce(&:+)
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   def cook(dry_ingredients = self.dry_ingredients)
       #     dry_ingredients.combine
       #   end
       class CircularArgumentReference < Base
+        extend TargetRubyVersion
+
         MSG = 'Circular argument reference - `%<arg_name>s`.'
+
+        maximum_target_ruby_version 2.6
 
         def on_kwoptarg(node)
           check_for_circular_argument_references(*node)

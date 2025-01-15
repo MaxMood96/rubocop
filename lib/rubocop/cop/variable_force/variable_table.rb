@@ -61,8 +61,8 @@ module RuboCop
                   "at #{node.source_range}, #{node.inspect}"
           end
 
-          variable.assign(node)
           mark_variable_as_captured_by_block_if_so(variable)
+          variable.assign(node)
         end
 
         def reference_variable(name, node)
@@ -87,8 +87,8 @@ module RuboCop
           # So just skip.
           return unless variable
 
-          variable.reference!(node)
           mark_variable_as_captured_by_block_if_so(variable)
+          variable.reference!(node)
         end
 
         def find_variable(name)
@@ -113,14 +113,14 @@ module RuboCop
         def accessible_variables
           scope_stack.reverse_each.with_object([]) do |scope, variables|
             variables.concat(scope.variables.values)
-            break variables unless scope.node.block_type?
+            break variables unless scope.node.block_type? || scope.node.numblock_type?
           end
         end
 
         private
 
         def mark_variable_as_captured_by_block_if_so(variable)
-          return unless current_scope.node.block_type?
+          return unless current_scope.node.block_type? || current_scope.node.numblock_type?
           return if variable.scope == current_scope
 
           variable.capture_with_block!

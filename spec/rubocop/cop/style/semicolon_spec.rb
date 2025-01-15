@@ -42,6 +42,20 @@ RSpec.describe RuboCop::Cop::Style::Semicolon, :config do
     RUBY
   end
 
+  it 'registers an offense when using a semicolon between a closing parenthesis after a line break and a consequent expression' do
+    expect_offense(<<~RUBY)
+      foo(
+        bar); baz
+            ^ Do not use semicolons to terminate expressions.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo(
+        bar)
+       baz
+    RUBY
+  end
+
   it 'accepts semicolon before end if so configured' do
     expect_no_offenses('def foo(a) z(3); end')
   end
@@ -119,6 +133,17 @@ RSpec.describe RuboCop::Cop::Style::Semicolon, :config do
     RUBY
   end
 
+  it 'registers an offense for a semicolon at the beginning of a lambda block' do
+    expect_offense(<<~RUBY)
+      foo -> {; bar }
+              ^ Do not use semicolons to terminate expressions.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo -> { bar }
+    RUBY
+  end
+
   it 'registers an offense for a semicolon at the end of a block' do
     expect_offense(<<~RUBY)
       foo { bar; }
@@ -147,6 +172,28 @@ RSpec.describe RuboCop::Cop::Style::Semicolon, :config do
       # ;
       foo {
       }
+    RUBY
+  end
+
+  it 'registers an offense when a semicolon at before a closing brace of string interpolation' do
+    expect_offense(<<~'RUBY')
+      "#{foo;}"
+            ^ Do not use semicolons to terminate expressions.
+    RUBY
+
+    expect_correction(<<~'RUBY')
+      "#{foo}"
+    RUBY
+  end
+
+  it 'registers an offense when a semicolon at after an opening brace of string interpolation' do
+    expect_offense(<<~'RUBY')
+      "#{;foo}"
+         ^ Do not use semicolons to terminate expressions.
+    RUBY
+
+    expect_correction(<<~'RUBY')
+      "#{foo}"
     RUBY
   end
 

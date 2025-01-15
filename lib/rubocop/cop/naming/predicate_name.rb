@@ -3,58 +3,74 @@
 module RuboCop
   module Cop
     module Naming
-      # Checks that predicate methods names end with a question mark and
+      # Checks that predicate method names end with a question mark and
       # do not start with a forbidden prefix.
       #
-      # A method is determined to be a predicate method if its name starts
-      # with one of the prefixes defined in the `NamePrefix` configuration.
-      # You can change what prefixes are considered by changing this option.
-      # Any method name that starts with one of these prefixes is required by
-      # the cop to end with a `?`. Other methods can be allowed by adding to
-      # the `AllowedMethods` configuration.
+      # A method is determined to be a predicate method if its name starts with
+      # one of the prefixes listed in the `NamePrefix` configuration. The list
+      # defaults to `is_`, `has_`, and `have_` but may be overridden.
       #
-      # NOTE: The `is_a?` method is allowed by default.
+      # Predicate methods must end with a question mark.
       #
-      # If `ForbiddenPrefixes` is set, methods that start with the configured
-      # prefixes will not be allowed and will be removed by autocorrection.
+      # When `ForbiddenPrefixes` is also set (as it is by default), predicate
+      # methods which begin with a forbidden prefix are not allowed, even if
+      # they end with a `?`. These methods should be changed to remove the
+      # prefix.
       #
-      # In other words, if `ForbiddenPrefixes` is empty, a method named `is_foo`
-      # will register an offense only due to the lack of question mark (and will be
-      # autocorrected to `is_foo?`). If `ForbiddenPrefixes` contains `is_`,
-      # `is_foo` will register an offense both because the ? is missing and because of
-      # the `is_` prefix, and will be corrected to `foo?`.
-      #
-      # NOTE: `ForbiddenPrefixes` is only applied to prefixes in `NamePrefix`;
-      # a prefix in the former but not the latter will not be considered by
-      # this cop.
-      #
-      # @example
+      # @example NamePrefix: ['is_', 'has_', 'have_'] (default)
       #   # bad
       #   def is_even(value)
       #   end
       #
-      #   def is_even?(value)
-      #   end
-      #
+      #   # When ForbiddenPrefixes: ['is_', 'has_', 'have_'] (default)
       #   # good
       #   def even?(value)
       #   end
       #
-      #   # bad
-      #   def has_value
-      #   end
-      #
-      #   def has_value?
-      #   end
-      #
+      #   # When ForbiddenPrefixes: []
       #   # good
-      #   def value?
+      #   def is_even?(value)
+      #   end
+      #
+      # @example NamePrefix: ['seems_to_be_']
+      #   # bad
+      #   def seems_to_be_even(value)
+      #   end
+      #
+      #   # When ForbiddenPrefixes: ['seems_to_be_']
+      #   # good
+      #   def even?(value)
+      #   end
+      #
+      #   # When ForbiddenPrefixes: []
+      #   # good
+      #   def seems_to_be_even?(value)
       #   end
       #
       # @example AllowedMethods: ['is_a?'] (default)
+      #   # Despite starting with the `is_` prefix, this method is allowed
       #   # good
       #   def is_a?(value)
       #   end
+      #
+      # @example AllowedMethods: ['is_even?']
+      #   # good
+      #   def is_even?(value)
+      #   end
+      #
+      # @example MethodDefinitionMacros: ['define_method', 'define_singleton_method'] (default)
+      #   # bad
+      #   define_method(:is_even) { |value| }
+      #
+      #   # good
+      #   define_method(:even?) { |value| }
+      #
+      # @example MethodDefinitionMacros: ['def_node_matcher']
+      #   # bad
+      #   def_node_matcher(:is_even) { |value| }
+      #
+      #   # good
+      #   def_node_matcher(:even?) { |value| }
       #
       class PredicateName < Base
         include AllowedMethods
@@ -72,7 +88,7 @@ module RuboCop
               next if allowed_method_name?(method_name.to_s, prefix)
 
               add_offense(
-                node.first_argument.loc.expression,
+                node.first_argument,
                 message: message(method_name, expected_name(method_name.to_s, prefix))
               )
             end
@@ -93,13 +109,23 @@ module RuboCop
         end
         alias on_defs on_def
 
+        def validate_config
+          forbidden_prefixes.each do |forbidden_prefix|
+            next if predicate_prefixes.include?(forbidden_prefix)
+
+            raise ValidationError, <<~MSG.chomp
+              The `Naming/PredicateName` cop is misconfigured. Prefix #{forbidden_prefix} must be included in NamePrefix because it is included in ForbiddenPrefixes.
+            MSG
+          end
+        end
+
         private
 
         def allowed_method_name?(method_name, prefix)
           !(method_name.start_with?(prefix) && # cheap check to avoid allocating Regexp
               method_name.match?(/^#{prefix}[^0-9]/)) ||
             method_name == expected_name(method_name, prefix) ||
-            method_name.end_with?('=') || # rubocop:todo InternalAffairs/MethodNameEndWith
+            method_name.end_with?('=') ||
             allowed_method?(method_name)
         end
 
@@ -109,7 +135,7 @@ module RuboCop
                      else
                        method_name.dup
                      end
-          new_name << '?' unless method_name.end_with?('?') # rubocop:todo InternalAffairs/MethodNameEndWith
+          new_name << '?' unless method_name.end_with?('?')
           new_name
         end
 

@@ -36,6 +36,7 @@ module RuboCop
         include RangeHelp
 
         MSG = 'Literal `%<literal>s` appeared as a condition.'
+        RESTRICT_ON_SEND = [:!].freeze
 
         def on_if(node)
           check_for_literal(node)
@@ -59,7 +60,7 @@ module RuboCop
           if case_node.condition
             check_case(case_node)
           else
-            case_node.each_when do |when_node|
+            case_node.when_branches.each do |when_node|
               next unless when_node.conditions.all?(&:literal?)
 
               range = when_conditions_range(when_node)

@@ -67,7 +67,7 @@ module RuboCop
 
           outermost_send = outermost_send_on_same_line(heredoc_arg)
           return unless outermost_send
-          return if end_keyword_before_closing_parentesis?(node)
+          return if end_keyword_before_closing_parenthesis?(node)
           return if subsequent_closing_parentheses_in_same_line?(outermost_send)
           return if exist_argument_between_heredoc_end_and_closing_parentheses?(node)
 
@@ -75,6 +75,7 @@ module RuboCop
             autocorrect(corrector, outermost_send)
           end
         end
+        alias on_csend on_send
 
         private
 
@@ -159,7 +160,7 @@ module RuboCop
 
         # Closing parenthesis helpers.
 
-        def end_keyword_before_closing_parentesis?(parenthesized_send_node)
+        def end_keyword_before_closing_parenthesis?(parenthesized_send_node)
           parenthesized_send_node.ancestors.any? do |ancestor|
             ancestor.loc.respond_to?(:end) && ancestor.loc.end&.source == 'end'
           end
@@ -182,7 +183,7 @@ module RuboCop
         end
 
         def add_correct_closing_paren(node, corrector)
-          corrector.insert_after(node.arguments.last, ')')
+          corrector.insert_after(node.last_argument, ')')
         end
 
         def remove_incorrect_closing_paren(node, corrector)
@@ -228,9 +229,9 @@ module RuboCop
         end
 
         def find_most_bottom_of_heredoc_end(arguments)
-          arguments.map do |argument|
+          arguments.filter_map do |argument|
             argument.loc.heredoc_end.end_pos if argument.loc.respond_to?(:heredoc_end)
-          end.compact.max
+          end.max
         end
 
         # Internal trailing comma helpers.
@@ -271,7 +272,7 @@ module RuboCop
         def add_correct_external_trailing_comma(node, corrector)
           return unless external_trailing_comma?(node)
 
-          corrector.insert_after(node.arguments.last, ',')
+          corrector.insert_after(node.last_argument, ',')
         end
 
         def remove_incorrect_external_trailing_comma(node, corrector)

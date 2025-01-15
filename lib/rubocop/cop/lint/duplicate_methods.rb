@@ -9,7 +9,6 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   def foo
       #     1
       #   end
@@ -18,20 +17,14 @@ module RuboCop
       #     2
       #   end
       #
-      # @example
-      #
       #   # bad
-      #
       #   def foo
       #     1
       #   end
       #
       #   alias foo bar
       #
-      # @example
-      #
       #   # good
-      #
       #   def foo
       #     1
       #   end
@@ -40,10 +33,7 @@ module RuboCop
       #     2
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   def foo
       #     1
       #   end
@@ -187,7 +177,7 @@ module RuboCop
           if DEF_TYPES.include?(node.type)
             node.loc.keyword.join(node.loc.name)
           else
-            node.loc.expression
+            node.source_range
           end
         end
 
@@ -253,12 +243,12 @@ module RuboCop
           # Assume that if a method definition is inside any block call which
           # we can't identify, it could be a DSL
           node.each_ancestor(:block).any? do |ancestor|
-            ancestor.method_name != :class_eval && !ancestor.class_constructor?
+            !ancestor.method?(:class_eval) && !ancestor.class_constructor?
           end
         end
 
         def source_location(node)
-          range = node.location.expression
+          range = node.source_range
           path = smart_path(range.source_buffer.name)
           "#{path}:#{range.line}"
         end

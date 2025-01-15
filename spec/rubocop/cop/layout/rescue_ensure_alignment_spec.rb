@@ -430,7 +430,7 @@ RSpec.describe RuboCop::Cop::Layout::RescueEnsureAlignment, :config do
   end
 
   it 'accepts correctly aligned rescue in assigned begin-end block' do
-    expect_no_offenses(<<-RUBY)
+    expect_no_offenses(<<~RUBY)
       foo = begin
               bar
             rescue BazError
@@ -603,6 +603,45 @@ RSpec.describe RuboCop::Cop::Layout::RescueEnsureAlignment, :config do
     end
   end
 
+  context 'Ruby 2.7', :ruby27 do
+    it 'accepts aligned rescue in do-end numbered block in a method' do
+      expect_no_offenses(<<~RUBY)
+        def foo
+          [1, 2, 3].each do
+            _1.to_s
+          rescue StandardError => _exception
+            next
+          end
+        end
+      RUBY
+    end
+
+    context 'rescue with do-end numbered block' do
+      it 'registers an offense' do
+        expect_offense(<<~RUBY)
+          def foo
+            [1, 2, 3].each do
+              _1.to_s
+          rescue StandardError => _exception
+          ^^^^^^ `rescue` at 4, 0 is not aligned with `[1, 2, 3].each do` at 2, 2.
+              next
+            end
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          def foo
+            [1, 2, 3].each do
+              _1.to_s
+            rescue StandardError => _exception
+              next
+            end
+          end
+        RUBY
+      end
+    end
+  end
+
   context 'rescue in do-end block assigned to local variable' do
     it 'registers an offense' do
       expect_offense(<<~RUBY)
@@ -683,6 +722,23 @@ RSpec.describe RuboCop::Cop::Layout::RescueEnsureAlignment, :config do
       expect_correction(<<~RUBY)
         CLASS = [].map do |_|
         rescue StandardError => _
+        end
+      RUBY
+    end
+  end
+
+  context 'rescue in do-end block assigned to object attribute' do
+    it 'registers an offense' do
+      expect_offense(<<~RUBY)
+        obj.attr = do_something do
+          rescue StandardError
+          ^^^^^^ `rescue` at 2, 2 is not aligned with `obj` at 1, 0.
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        obj.attr = do_something do
+        rescue StandardError
         end
       RUBY
     end

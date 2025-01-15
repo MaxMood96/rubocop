@@ -9,7 +9,7 @@ module RuboCop
       #
       # String interpolation is always kept in double quotes.
       #
-      # Note: `Lint/SymbolConversion` can be used in parallel to ensure that symbols
+      # NOTE: `Lint/SymbolConversion` can be used in parallel to ensure that symbols
       # are not quoted that don't need to be. This cop is for configuring the quoting
       # style to use for symbols that require quotes.
       #
@@ -98,9 +98,7 @@ module RuboCop
 
         def style
           return super unless super == :same_as_string_literals
-
-          string_literals_config = config.for_cop('Style/StringLiterals')
-          return :single_quotes unless string_literals_config['Enabled']
+          return :single_quotes unless config.cop_enabled?('Style/StringLiterals')
 
           string_literals_config['EnforcedStyle'].to_sym
         end

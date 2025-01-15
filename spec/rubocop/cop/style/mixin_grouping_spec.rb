@@ -42,6 +42,14 @@ RSpec.describe RuboCop::Cop::Style::MixinGrouping, :config do
           end
         RUBY
       end
+
+      it 'does not register an offense when `include` has no arguments' do
+        expect_no_offenses(<<~RUBY)
+          class Foo
+            include
+          end
+        RUBY
+      end
     end
 
     context 'when using `extend`' do
@@ -57,6 +65,14 @@ RSpec.describe RuboCop::Cop::Style::MixinGrouping, :config do
           class Foo
             extend Qux
             extend Bar
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when `extend` has no arguments' do
+        expect_no_offenses(<<~RUBY)
+          class Foo
+            extend
           end
         RUBY
       end
@@ -78,9 +94,17 @@ RSpec.describe RuboCop::Cop::Style::MixinGrouping, :config do
           end
         RUBY
       end
+
+      it 'does not register an offense when `prepend` has no arguments' do
+        expect_no_offenses(<<~RUBY)
+          class Foo
+            prepend
+          end
+        RUBY
+      end
     end
 
-    context 'when using a mix of diffent methods' do
+    context 'when using a mix of different methods' do
       it 'registers an offense for some calls having several mixins' do
         expect_offense(<<~RUBY)
           class Foo
@@ -223,7 +247,7 @@ RSpec.describe RuboCop::Cop::Style::MixinGrouping, :config do
           end
         RUBY
 
-        # empty line left by prpend Qux
+        # empty line left by prepend Qux
         expect_correction(<<~RUBY)
           class Foo
             prepend Qux, Bar
@@ -235,7 +259,7 @@ RSpec.describe RuboCop::Cop::Style::MixinGrouping, :config do
       end
     end
 
-    context 'when using a mix of diffent methods' do
+    context 'when using a mix of different methods' do
       it 'registers an offense with some duplicated mixin methods' do
         expect_offense(<<~RUBY)
           class Foo

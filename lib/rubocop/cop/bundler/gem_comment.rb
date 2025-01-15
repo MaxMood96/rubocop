@@ -124,7 +124,7 @@ module RuboCop
         end
 
         def preceding_comment?(node1, node2)
-          node1 && node2 && precede?(node2, node1) && comment_line?(node2.loc.expression.source)
+          node1 && node2 && precede?(node2, node1) && comment_line?(node2.source)
         end
 
         def ignored_gem?(node)
@@ -150,7 +150,7 @@ module RuboCop
         # Version specifications that restrict all updates going forward. This excludes versions
         # like ">= 1.0" or "!= 2.0.3".
         def restrictive_version_specified_gem?(node)
-          return unless version_specified_gem?(node)
+          return false unless version_specified_gem?(node)
 
           node.arguments[1..]
               .any? { |arg| arg&.str_type? && RESTRICTIVE_VERSION_PATTERN.match?(arg.value) }
@@ -161,9 +161,9 @@ module RuboCop
         end
 
         def gem_options(node)
-          return [] unless node.arguments.last&.type == :hash
+          return [] unless node.last_argument&.hash_type?
 
-          node.arguments.last.keys.map(&:value)
+          node.last_argument.keys.map(&:value)
         end
       end
     end

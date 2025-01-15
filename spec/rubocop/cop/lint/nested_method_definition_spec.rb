@@ -88,6 +88,72 @@ RSpec.describe RuboCop::Cop::Lint::NestedMethodDefinition, :config do
     RUBY
   end
 
+  it 'does not register offense for definition of method on instance var' do
+    expect_no_offenses(<<~RUBY)
+      class Foo
+        def x
+          def @obj.y
+          end
+        end
+      end
+    RUBY
+  end
+
+  it 'does not register offense for definition of method on class var' do
+    expect_no_offenses(<<~RUBY)
+      class Foo
+        def x
+          def @@obj.y
+          end
+        end
+      end
+    RUBY
+  end
+
+  it 'does not register offense for definition of method on global var' do
+    expect_no_offenses(<<~RUBY)
+      class Foo
+        def x
+          def $obj.y
+          end
+        end
+      end
+    RUBY
+  end
+
+  it 'does not register offense for definition of method on constant' do
+    expect_no_offenses(<<~RUBY)
+      class Foo
+        def x
+          def Const.y
+          end
+        end
+      end
+    RUBY
+  end
+
+  it 'does not register offense for definition of method on method call' do
+    expect_no_offenses(<<~RUBY)
+      class Foo
+        def x
+          def do_something.y
+          end
+        end
+      end
+    RUBY
+  end
+
+  it 'does not register offense for definition of method on safe navigation method call' do
+    expect_no_offenses(<<~RUBY)
+      class Foo
+        def x
+          def (do_something&.y).z
+          end
+        end
+      end
+    RUBY
+  end
+
   it 'does not register offense for nested definition inside class_eval' do
     expect_no_offenses(<<~RUBY)
       class Foo
@@ -292,6 +358,34 @@ RSpec.describe RuboCop::Cop::Lint::NestedMethodDefinition, :config do
               end
 
               do_something(_1)
+            end
+          end
+        end
+      RUBY
+    end
+
+    it 'does not register offense for nested definition inside instance_eval with a numblock' do
+      expect_no_offenses(<<~RUBY)
+        class Foo
+          def x(obj)
+            obj.instance_eval do
+              @bar = _1
+              def y
+              end
+            end
+          end
+        end
+      RUBY
+    end
+
+    it 'does not register offense for nested definition inside instance_exec with a numblock' do
+      expect_no_offenses(<<~RUBY)
+        class Foo
+          def x(obj)
+            obj.instance_exec(3) do
+              @bar = _1
+              def y
+              end
             end
           end
         end

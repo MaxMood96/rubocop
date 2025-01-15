@@ -4,8 +4,8 @@ module RuboCop
   module Cop
     module Style
       # Checks for uses of if/then/else/end constructs on a single line.
-      # AlwaysCorrectToMultiline config option can be set to true to auto-convert all offenses to
-      # multi-line constructs. When AlwaysCorrectToMultiline is false (default case) the
+      # `AlwaysCorrectToMultiline` config option can be set to true to autocorrect all offenses to
+      # multi-line constructs. When `AlwaysCorrectToMultiline` is false (default case) the
       # autocorrect will first try converting them to ternary operators.
       #
       # @example
@@ -30,6 +30,25 @@ module RuboCop
       #   else
       #     baz
       #   end
+      #
+      # @example AlwaysCorrectToMultiline: false (default)
+      #   # bad
+      #   if cond then run else dont end
+      #
+      #   # good
+      #   cond ? run : dont
+      #
+      # @example AlwaysCorrectToMultiline: true
+      #   # bad
+      #   if cond then run else dont end
+      #
+      #   # good
+      #   if cond
+      #     run
+      #   else
+      #     dont
+      #   end
+      #
       class OneLineConditional < Base
         include Alignment
         include ConfigurableEnforcedStyle
@@ -42,11 +61,15 @@ module RuboCop
         def on_normal_if_unless(node)
           return unless node.single_line?
           return unless node.else_branch
-          return if node.elsif?
+          return if node.elsif? || node.if_branch&.begin_type?
 
           message = message(node)
           add_offense(node, message: message) do |corrector|
+            next if part_of_ignored_node?(node)
+
             autocorrect(corrector, node)
+
+            ignore_node(node)
           end
         end
 
@@ -75,15 +98,17 @@ module RuboCop
         end
 
         def always_multiline?
-          @config.for_cop('Style/OneLineConditional')['AlwaysCorrectToMultiline']
+          cop_config['AlwaysCorrectToMultiline']
         end
 
         def cannot_replace_to_ternary?(node)
-          node.elsif_conditional?
+          return true if node.elsif_conditional?
+
+          node.else_branch.begin_type? && node.else_branch.children.compact.count >= 2
         end
 
         def ternary_replacement(node)
-          condition, if_branch, else_branch = *node
+          condition, if_branch, else_branch = *node # rubocop:disable InternalAffairs/NodeDestructuring
 
           "#{expr_replacement(condition)} ? " \
             "#{expr_replacement(if_branch)} : " \

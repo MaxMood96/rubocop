@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 RSpec.describe RuboCop::Cop::Style::ArrayIntersect, :config do
-  context 'when TargetRubyVersion <= 3.0', :ruby30 do
+  context 'when TargetRubyVersion <= 3.0', :ruby30, unsupported_on: :prism do
     it 'does not register an offense when using `(array1 & array2).any?`' do
       expect_no_offenses(<<~RUBY)
         (array1 & array2).any?
@@ -29,6 +29,35 @@ RSpec.describe RuboCop::Cop::Style::ArrayIntersect, :config do
 
       expect_correction(<<~RUBY)
         !customer_country_codes.intersect?(SUPPORTED_COUNTRIES)
+      RUBY
+    end
+
+    it 'registers an offense when using `none?`' do
+      expect_offense(<<~RUBY)
+        (a & b).none?
+        ^^^^^^^^^^^^^ Use `!a.intersect?(b)` instead of `(a & b).none?`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        !a.intersect?(b)
+      RUBY
+    end
+
+    it 'does not register an offense when using `(array1 & array2).any?` with block' do
+      expect_no_offenses(<<~RUBY)
+        (array1 & array2).any? { |x| false }
+      RUBY
+    end
+
+    it 'does not register an offense when using `(array1 & array2).any?` with symbol block' do
+      expect_no_offenses(<<~RUBY)
+        (array1 & array2).any?(&:block)
+      RUBY
+    end
+
+    it 'does not register an offense when using `(array1 & array2).any?` with numbered block' do
+      expect_no_offenses(<<~RUBY)
+        (array1 & array2).any? { do_something(_1) }
       RUBY
     end
 

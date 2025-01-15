@@ -3,13 +3,12 @@
 module RuboCop
   module Cop
     module Layout
-      # Checks for indentation that doesn't use the specified number
-      # of spaces.
+      # Checks for indentation that doesn't use the specified number of spaces.
+      # The indentation width can be configured using the `Width` setting. The default width is 2.
       #
-      # See also the IndentationConsistency cop which is the companion to this
-      # one.
+      # See also the `Layout/IndentationConsistency` cop which is the companion to this one.
       #
-      # @example
+      # @example Width: 2 (default)
       #   # bad
       #   class A
       #    def test
@@ -59,16 +58,17 @@ module RuboCop
         PATTERN
 
         def on_rescue(node)
-          _begin_node, *_rescue_nodes, else_node = *node
-          check_indentation(node.loc.else, else_node)
+          check_indentation(node.loc.else, node.else_branch)
         end
 
-        def on_ensure(node)
+        def on_resbody(node)
           check_indentation(node.loc.keyword, node.body)
         end
+        alias on_for on_resbody
 
-        alias on_resbody on_ensure
-        alias on_for     on_ensure
+        def on_ensure(node)
+          check_indentation(node.loc.keyword, node.branch)
+        end
 
         def on_kwbegin(node)
           # Check indentation against end keyword but only if it's first on its
@@ -136,7 +136,7 @@ module RuboCop
         alias on_until on_while
 
         def on_case(case_node)
-          case_node.each_when do |when_node|
+          case_node.when_branches.each do |when_node|
             check_indentation(when_node.loc.keyword, when_node.body)
           end
 
@@ -326,8 +326,7 @@ module RuboCop
           if body_node.rescue_type?
             check_rescue?(body_node)
           elsif body_node.ensure_type?
-            block_body, = *body_node
-
+            block_body, = *body_node # rubocop:disable InternalAffairs/NodeDestructuring
             if block_body&.rescue_type?
               check_rescue?(block_body)
             else
@@ -354,7 +353,7 @@ module RuboCop
           # Don't check indentation if the line doesn't start with the body.
           # For example, lines like "else do_something".
           first_char_pos_on_line = body_node.source_range.source_line =~ /\S/
-          return true unless body_node.loc.column == first_char_pos_on_line
+          body_node.loc.column != first_char_pos_on_line
         end
 
         def offending_range(body_node, indentation)
@@ -366,10 +365,10 @@ module RuboCop
         end
 
         def starts_with_access_modifier?(body_node)
-          return unless body_node.begin_type?
+          return false unless body_node.begin_type?
 
           starting_node = body_node.children.first
-          return unless starting_node
+          return false unless starting_node
 
           starting_node.send_type? && starting_node.bare_access_modifier?
         end

@@ -11,7 +11,6 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   class C
       #     private
       #
@@ -20,10 +19,7 @@ module RuboCop
       #     end
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   class C
       #     def self.method
       #       puts 'hi'
@@ -32,10 +28,7 @@ module RuboCop
       #     private_class_method :method
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   class C
       #     class << self
       #       private
@@ -83,7 +76,7 @@ module RuboCop
                           ALTERNATIVE_PROTECTED
                         end
           format(MSG, modifier: visibility,
-                      line: modifier.location.expression.line,
+                      line: modifier.source_range.line,
                       alternative: alternative)
         end
 

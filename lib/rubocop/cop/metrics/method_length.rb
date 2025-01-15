@@ -8,15 +8,16 @@ module RuboCop
       # The maximum allowed length is configurable.
       #
       # You can set constructs you want to fold with `CountAsOne`.
-      # Available are: 'array', 'hash', 'heredoc', and 'method_call'. Each construct
-      # will be counted as one line regardless of its actual size.
+      #
+      # Available are: 'array', 'hash', 'heredoc', and 'method_call'.
+      # Each construct will be counted as one line regardless of its actual size.
       #
       # NOTE: The `ExcludedMethods` and `IgnoredMethods` configuration is
       # deprecated and only kept for backwards compatibility.
       # Please use `AllowedMethods` and `AllowedPatterns` instead.
       # By default, there are no methods to allowed.
       #
-      # @example CountAsOne: ['array', 'heredoc', 'method_call']
+      # @example CountAsOne: ['array', 'hash', 'heredoc', 'method_call']
       #
       #   def m
       #     array = [       # +1
@@ -24,7 +25,7 @@ module RuboCop
       #       2
       #     ]
       #
-      #     hash = {        # +3
+      #     hash = {        # +1
       #       key: 'value'
       #     }
       #
@@ -37,7 +38,7 @@ module RuboCop
       #       1,
       #       2
       #     )
-      #   end               # 6 points
+      #   end               # 4 points
       #
       class MethodLength < Base
         include CodeLength
@@ -47,14 +48,17 @@ module RuboCop
         LABEL = 'Method'
 
         def on_def(node)
-          return if allowed_method?(node.method_name) || matches_allowed_pattern?(node.method_name)
+          return if allowed?(node.method_name)
 
           check_code_length(node)
         end
         alias on_defs on_def
 
         def on_block(node)
-          return unless node.send_node.method?(:define_method)
+          return unless node.method?(:define_method)
+
+          method_name = node.send_node.first_argument
+          return if method_name.basic_literal? && allowed?(method_name.value)
 
           check_code_length(node)
         end
@@ -64,6 +68,10 @@ module RuboCop
 
         def cop_label
           LABEL
+        end
+
+        def allowed?(method_name)
+          allowed_method?(method_name) || matches_allowed_pattern?(method_name)
         end
       end
     end

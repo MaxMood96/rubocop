@@ -142,14 +142,16 @@ module RuboCop
           end
 
           next_token = processed_source.tokens[token_number]
-          token = next_token if Encoding::ENCODING_PATTERN.match?(next_token&.text)
+          if next_token&.text&.valid_encoding? && Encoding::ENCODING_PATTERN.match?(next_token.text)
+            token = next_token
+          end
 
           token
         end
 
         def frozen_string_literal_comment(processed_source)
-          processed_source.find_token do |token|
-            token.text.start_with?(FROZEN_STRING_LITERAL)
+          processed_source.tokens.find do |token|
+            token.text.start_with?(FROZEN_STRING_LITERAL_REGEXP)
           end
         end
 

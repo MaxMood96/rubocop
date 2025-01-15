@@ -15,13 +15,10 @@ Use the bundled rake task `new_cop` to generate a cop template:
 [source,sh]
 ----
 $ bundle exec rake 'new_cop[Department/Name]'
-Files created:
-  - lib/rubocop/cop/department/name.rb
-  - spec/rubocop/cop/department/name_spec.rb
-File modified:
-  - `require_relative 'rubocop/cop/department/name'` added into lib/rubocop.rb
-  - A configuration for the cop is added into config/default.yml
-
+[create] lib/rubocop/cop/department/name.rb
+[create] spec/rubocop/cop/department/name_spec.rb
+[modify] lib/rubocop.rb - `require_relative 'rubocop/cop/department/name'` was injected.
+[modify] A configuration for the cop is added into config/default.yml.
 Do 4 steps:
   1. Modify the description of Department/Name in config/default.yml
   2. Implement your new cop in the generated file!
@@ -124,6 +121,13 @@ https://www.rubydoc.info/gems/rubocop-ast/RuboCop/AST/NodePattern[node pattern]
 and use patterns to match with specific nodes that you want to match.
 
 You can learn more about Node Pattern https://github.com/rubocop/rubocop-ast/blob/master/docs/modules/ROOT/pages/node_pattern.adoc[here].
+
+Alias `NodePattern` to `RuboCop::AST::NodePattern` to make it easier to use:
+
+[source,ruby]
+----
+NodePattern = RuboCop::AST::NodePattern
+----
 
 Node pattern matches something very similar to the current output from AST
 representation, then let's start with something very generic:
@@ -347,6 +351,167 @@ The corrector allows you to `insert_after`, `insert_before`, `wrap` or
 Range can be determined on `node.location` where it brings specific
 ranges for expression or other internal information that the node holds.
 
+==== Preventing Clobbering
+
+The corrector detects and prevents correcting overlapping nodes, to prevent one correction from clobbering another.
+Supporting nested corrections is done by taking multiple passes, and skipping corrections for nested nodes.
+This can be implemented using the `IgnoredNode` module:
+
+[source,diff]
+----
+ extend AutoCorrector
++include IgnoredNode
+
+ def on_send(node)
+   return unless some_condition?(node)
+
+   add_offense(node) do |corrector|
++    next if part_of_ignored_node?(node)
++
+     corrector.replace(node, "...")
+   end
++
++  ignore_node(node)
+ end
+----
+
+This works because the correcting a file is implemented by repeating investigation and correction until the file no longer requires correction, meaning all nested nodes will eventually be processed.
+
+Note that `expect_correction` in `Cop` specs only asserts the result after one pass.
+
+=== Limit by Ruby or Gem versions
+
+Some cops apply changes that only apply in particular contexts, such as if the user has a minimum Ruby version. There are helpers that let you constrain your cops automatically, to only run where applicable.
+
+==== Requiring a minimum Ruby version
+
+If your cop uses new Ruby syntax or standard library APIs, it should only register offenses if the user has the proper target Ruby version, which you can require with https://www.rubydoc.info/gems/rubocop/RuboCop/Cop/TargetRubyVersion#minimum_target_ruby_version-instance_method[`TargetRubyVersion#minimum_target_ruby_version`].
+
+For example, the `Performance/SelectMap` cop requires Ruby 2.7, which introduced `Enumerable#filter_map`:
+
+```ruby
+class RuboCop::Cop::Performance::SelectMap < Base
+  extend TargetRubyVersion
+
+  minimum_target_ruby_version 2.7
+
+  # ...
+end
+```
+
+This cop won't register offenses on Ruby 2.6 or older.
+
+==== Requiring a maximum Ruby version
+
+Mirroring `minimum_target_ruby_version`, you can also specify a maximum Ruby version your cop should analyze.
+
+For example, the `Lint/CircularArgumentReference` cop only runs when analyzing code for Ruby before 2.7. The code it is looking for can never be written in more recent Rubies, it would be a syntax error:
+
+```ruby
+class RuboCop::Cop::Lint::CircularArgumentReference < Base
+  extend TargetRubyVersion
+
+  maximum_target_ruby_version 2.6
+
+  # ...
+end
+```
+
+==== Requiring a gem
+
+If your cop depends on the presence of a gem, you can declare that with https://www.rubydoc.info/gems/rubocop/RuboCop/Cop/Base#requires_gem-class_method[`RuboCop::Cop::Base.requires_gem`].
+
+For example, to declare that `MyCop` should only apply if the bundle is using `my-gem` with a version between `1.2.3` and `4.5.6`:
+
+```Ruby
+class MyCop < Base
+  requires_gem "my-gem", ">= 1.2.3", "< 4.5.6"
+
+  # ...
+end
+```
+
+You can specify any gem requirement using https://guides.rubygems.org/patterns/#declaring-dependencies[the same syntax as your `Gemfile`].
+
+You can also handle multiple versions of a gem with `target_gem_version`. It behaves similar to `target_ruby_version`, allowing you to inspect a gem version at runtime:
+
+```Ruby
+class MyCop < Base
+  requires_gem "my-gem"
+
+  def on_send(node)
+    if target_gem_version("my-gem) < "2.0"
+      # ...
+    else
+      # ...
+    end
+  end
+end
+```
+
+When writing tests, you can specify the gem version to run your example against through the `gem_versions` RSpec helper:
+
+```Ruby
+describe RuboCop::Cop::Style::MyCop, :config do
+  context 'when `my-gem` is at version `1.X`' do
+    let(:gem_versions) { { 'my-gem' => '1.0.0' } }
+
+    it 'registers no offense' do
+      expect_no_offenses(<<~RUBY)
+        MyGem.foo
+      RUBY
+    end
+  end
+
+  context 'when `my-gem` is at version `2.X`' do
+    let(:gem_versions) { { 'my-gem' => '2.0.0' } }
+
+    it 'registers an offense' do
+      expect_offense(<<~RUBY)
+        MyGem.foo
+        ^^^^^^^^^ Instead of `foo`, use the newer `bar` method.
+      RUBY
+    end
+  end
+end
+```
+
+==== Special case: Rails
+
+Historically, many cops in `rubocop-rails` aren't actually specific to Rails itself, but some of its components (e.g. `ActiveSupport`). These dependencies are declared with https://www.rubydoc.info/gems/rubocop-rails/RuboCop/Cop/TargetRailsVersion#minimum_target_rails_version-instance_method[`TargetRailsVersion.minimum_target_rails_version`].
+
+For example, the `Rails/Pluck` cop requires ActiveSupport 6.0, which introduces `Enumerable#pluck`:
+
+```ruby
+class RuboCop::Cop::Rails::Pluck < Base
+  extend TargetRailsVersion
+
+  minimum_target_rails_version 6.0
+
+  #...
+end
+```
+
+=== Run tests
+
+RuboCop supports two parser engines: the Parser gem and Prism. By default, tests are executed with the Parser:
+
+```console
+$ bundle exec rake spec
+```
+
+To run all tests with the experimental support for Prism, use `bundle exec prism_spec`, and to execute tests for individual files,
+specify the environment variable `PARSER_ENGINE=parser_prism`.
+
+e.g., `PARSER_ENGINE=parser_prism spec/rubocop/cop/style/hash_syntax_spec.rb`
+
+`bundle exec rake` runs tests for both Parser gem and Prism parsers.
+
+But `ascii_spec` rake task does not run by default. Because `ascii_spec` task has not been failing for a while.
+However, `ascii_spec` task will continue to be checked in CI.
+
+In CI, all tests required for merging are executed. Please investigate if anything fails.
+
 === Configuration
 
 Each cop can hold a configuration and you can refer to `cop_config` in the
@@ -448,7 +613,7 @@ we strive to make this consistent. PRs improving RuboCop documentation are very 
 
 == Testing your cop in a real codebase
 
-Generally, is a good practice to check if your cop is working properly over a
+It's generally good practice to check if your cop is working properly over a
 significant codebase (e.g. Rails or some big project you're working on) to
 guarantee it's working in a range of different syntaxes.
 

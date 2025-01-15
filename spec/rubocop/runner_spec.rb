@@ -121,99 +121,133 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
       end
     end
 
-    context 'with available custom ruby extractor' do
-      before do
+    context 'custom ruby extractors' do
+      around do |example|
         described_class.ruby_extractors.unshift(custom_ruby_extractor)
 
-        # Make Style/EndOfLine give same output regardless of platform.
+        # Ignore platform differences.
         create_file('.rubocop.yml', <<~YAML)
           Layout/EndOfLine:
-            EnforcedStyle: lf
+            Enabled: false
         YAML
-      end
 
-      after do
+        example.call
+      ensure
         described_class.ruby_extractors.shift
       end
 
-      let(:custom_ruby_extractor) do
-        lambda do |_processed_source|
-          [
-            {
-              offset: 1,
-              processed_source: RuboCop::ProcessedSource.new(<<~RUBY, 3.1, 'dummy.rb')
-                # frozen_string_literal: true
+      context 'when the extractor matches' do
+        # rubocop:disable Layout/LineLength
+        let(:custom_ruby_extractor) do
+          lambda do |_processed_source|
+            [
+              {
+                offset: 1,
+                processed_source: RuboCop::ProcessedSource.new(<<~RUBY, 3.3, 'dummy.rb', parser_engine: parser_engine)
+                  # frozen_string_literal: true
 
-                def valid_code; end
-              RUBY
-            },
-            {
-              offset: 2,
-              processed_source: RuboCop::ProcessedSource.new(source, 3.1, 'dummy.rb')
-            }
-          ]
+                  def valid_code; end
+                RUBY
+              },
+              {
+                offset: 2,
+                processed_source: RuboCop::ProcessedSource.new(source, 3.3, 'dummy.rb', parser_engine: parser_engine)
+              }
+            ]
+          end
+        end
+        # rubocop:enable Layout/LineLength
+
+        let(:source) do
+          <<~RUBY
+            # frozen_string_literal: true
+
+            def INVALID_CODE; end
+          RUBY
+        end
+
+        it 'sends the offense to a formatter' do
+          runner.run([])
+          expect(formatter_output).to eq <<~RESULT
+            Inspecting 1 file
+            C
+
+            Offenses:
+
+            example.rb:3:7: C: Naming/MethodName: Use snake_case for method names.
+            def INVALID_CODE; end
+                  ^^^^^^^^^^^^
+
+            1 file inspected, 1 offense detected
+          RESULT
         end
       end
 
-      let(:source) do
-        <<~RUBY
+      context 'when the extractor does not match' do
+        let(:custom_ruby_extractor) do
+          lambda do |_processed_source|
+          end
+        end
+
+        let(:source) { <<~RUBY }
           # frozen_string_literal: true
 
           def INVALID_CODE; end
         RUBY
-      end
 
-      it 'sends the offense to a formatter' do
-        runner.run([])
-        expect(formatter_output).to eq <<~RESULT
-          Inspecting 1 file
-          C
+        it 'sends the offense to a formatter' do
+          runner.run([])
+          expect(formatter_output).to eq <<~RESULT
+            Inspecting 1 file
+            C
 
-          Offenses:
+            Offenses:
 
-          example.rb:3:7: C: Naming/MethodName: Use snake_case for method names.
-          def INVALID_CODE; end
+            example.rb:3:5: C: Naming/MethodName: Use snake_case for method names.
+            def INVALID_CODE; end
                 ^^^^^^^^^^^^
 
-          1 file inspected, 1 offense detected
-        RESULT
-      end
-    end
-
-    context 'with unavailable custom ruby extractor' do
-      before do
-        described_class.ruby_extractors.unshift(custom_ruby_extractor)
-      end
-
-      after do
-        described_class.ruby_extractors.shift
-      end
-
-      let(:custom_ruby_extractor) do
-        lambda do |_processed_source|
+            1 file inspected, 1 offense detected
+          RESULT
         end
       end
 
-      let(:source) { <<~RUBY }
-        # frozen_string_literal: true
+      context 'when the extractor crashes' do
+        let(:source) { <<~RUBY }
+          # frozen_string_literal: true
 
-        def INVALID_CODE; end
-      RUBY
+          def foo; end
+        RUBY
 
-      it 'sends the offense to a formatter' do
-        runner.run([])
-        expect(formatter_output).to eq <<~RESULT
-          Inspecting 1 file
-          C
+        shared_examples 'error handling' do
+          it 'raises an error with the crashing extractor/file' do
+            expect do
+              runner.run([])
+            end.to raise_error(RuboCop::Error, /runner_spec\.rb failed to process .*example\.rb/)
+          end
+        end
 
-          Offenses:
+        context 'and it is a Proc' do
+          let(:custom_ruby_extractor) do
+            lambda do |_processed_source|
+              raise 'Oh no!'
+            end
+          end
 
-          example.rb:3:5: C: Naming/MethodName: Use snake_case for method names.
-          def INVALID_CODE; end
-              ^^^^^^^^^^^^
+          it_behaves_like 'error handling'
+        end
 
-          1 file inspected, 1 offense detected
-        RESULT
+        context 'and it responds to `call`' do
+          let(:custom_ruby_extractor) do
+            Class.new do
+              def self.call(_processed_source)
+                raise 'Oh no!'
+              end
+            end
+          end
+
+          it_behaves_like 'error handling'
+        end
       end
     end
 
@@ -281,9 +315,11 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
   end
 
   describe '#run with cops autocorrecting each-other' do
-    let(:source_file_path) { create_file('example.rb', source) }
+    include_context 'mock console output'
 
-    let(:options) { { autocorrect: true, formatters: [['progress', formatter_output_path]] } }
+    let!(:source_file_path) { create_file('example.rb', source) }
+
+    let(:options) { { autocorrect: true } }
 
     context 'with two conflicting cops' do
       subject(:runner) do
@@ -307,14 +343,27 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
           end
         RUBY
 
-        it 'aborts because of an infinite loop' do
-          expect do
-            runner.run([])
-          end.to raise_error(
-            RuboCop::Runner::InfiniteCorrectionLoop,
+        it 'records the infinite loop error' do
+          runner.run([])
+          expect(runner.errors.size).to be(1)
+          expect(runner.errors[0].message).to eq(
             "Infinite loop detected in #{source_file_path} and caused by " \
             'Test/ClassMustBeAModuleCop -> Test/ModuleMustBeAClassCop'
           )
+        end
+
+        context 'when `raise_cop_error` is set' do
+          let(:options) { { autocorrect: true, raise_cop_error: true } }
+
+          it 'raises the infinite loop error' do
+            expect do
+              runner.run([])
+            end.to raise_error(
+              described_class::InfiniteCorrectionLoop,
+              "Infinite loop detected in #{source_file_path} and caused by " \
+              'Test/ClassMustBeAModuleCop -> Test/ModuleMustBeAClassCop'
+            )
+          end
         end
       end
 
@@ -327,11 +376,11 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
           end
         RUBY
 
-        it 'aborts because of an infinite loop' do
-          expect do
-            runner.run([])
-          end.to raise_error(
-            RuboCop::Runner::InfiniteCorrectionLoop,
+        it 'records the infinite loop error' do
+          runner.run([])
+
+          expect(runner.errors.size).to be(1)
+          expect(runner.errors[0].message).to eq(
             "Infinite loop detected in #{source_file_path} and caused by " \
             'Test/ClassMustBeAModuleCop -> Test/ModuleMustBeAClassCop'
           )
@@ -363,14 +412,13 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
           end
         RUBY
 
-        it 'aborts because of an infinite loop' do
-          expect do
-            runner.run([])
-          end.to raise_error(
-            RuboCop::Runner::InfiniteCorrectionLoop,
+        it 'records the infinite loop error' do
+          runner.run([])
+
+          expect(runner.errors.size).to be(1)
+          expect(runner.errors[0].message).to eq(
             "Infinite loop detected in #{source_file_path} and caused by " \
-            'Test/ClassMustBeAModuleCop, Test/AtoB ' \
-            '-> Test/ModuleMustBeAClassCop, Test/BtoA'
+            'Test/ClassMustBeAModuleCop, Test/AtoB -> Test/ModuleMustBeAClassCop, Test/BtoA'
           )
         end
       end
@@ -398,11 +446,11 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
             end
           RUBY
 
-          it 'aborts because of an infinite loop' do
-            expect do
-              runner.run([])
-            end.to raise_error(
-              RuboCop::Runner::InfiniteCorrectionLoop,
+          it 'records the infinite correction error' do
+            runner.run([])
+
+            expect(runner.errors.size).to be(1)
+            expect(runner.errors[0].message).to eq(
               "Infinite loop detected in #{source_file_path} and caused by " \
               'Test/AtoB -> Test/BtoC -> Test/CtoA'
             )
@@ -432,7 +480,7 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
             expect(runner.run([])).to be false
           end
 
-          it 'ommits unsafe correctable `Style/FrozenStringLiteral`' do
+          it 'omits unsafe correctable `Style/FrozenStringLiteral`' do
             runner.run([])
             expect(formatter_output).to eq <<~RESULT
               Inspecting 1 file
@@ -475,7 +523,7 @@ RSpec.describe RuboCop::Runner, :isolated_environment do
             expect(runner.run([])).to be false
           end
 
-          it 'ommits uncorrectable `Layout/LineLength`' do
+          it 'omits uncorrectable `Layout/LineLength`' do
             runner.run([])
             expect(formatter_output).to eq <<~RESULT
               Inspecting 1 file

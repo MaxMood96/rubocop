@@ -37,11 +37,12 @@ module RuboCop
         last_uri_match = match_uris(line).last
         return nil unless last_uri_match
 
-        begin_position, end_position = last_uri_match.offset(0).map do |pos|
-          pos + indentation_difference(line)
-        end
-
+        begin_position, end_position = last_uri_match.offset(0)
         end_position = extend_uri_end_position(line, end_position)
+
+        line_indentation_difference = indentation_difference(line)
+        begin_position += line_indentation_difference
+        end_position += line_indentation_difference
 
         return nil if begin_position < max_line_length && end_position < max_line_length
 
@@ -91,8 +92,13 @@ module RuboCop
       end
 
       def uri_regexp
-        @uri_regexp ||=
-          URI::DEFAULT_PARSER.make_regexp(config.for_cop('Layout/LineLength')['URISchemes'])
+        @uri_regexp ||= begin
+          # Ruby 3.4 changes the default parser to RFC3986 which warns on make_regexp.
+          # Additionally, the RFC2396_PARSER alias is only available on 3.4 for now.
+          # Extra info at https://github.com/ruby/uri/issues/118
+          parser = defined?(URI::RFC2396_PARSER) ? URI::RFC2396_PARSER : URI::DEFAULT_PARSER
+          parser.make_regexp(config.for_cop('Layout/LineLength')['URISchemes'])
+        end
       end
 
       def valid_uri?(uri_ish_string)

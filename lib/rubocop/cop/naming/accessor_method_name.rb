@@ -3,13 +3,13 @@
 module RuboCop
   module Cop
     module Naming
-      # Makes sure that accessor methods are named properly. Applies
-      # to both instance and class methods.
+      # Avoid prefixing accessor method names with `get_` or `set_`.
+      # Applies to both instance and class methods.
       #
-      # NOTE: Offenses are only registered for methods with the expected
-      # arity. Getters (`get_attribute`) must have no arguments to be
-      # registered, and setters (`set_attribute(value)`) must have exactly
-      # one.
+      # NOTE: Method names starting with `get_` or `set_` only register an offense
+      # when the methods match the expected arity for getters and setters respectively.
+      # Getters (`get_attribute`) must have no arguments to be registered,
+      # and setters (`set_attribute(value)`) must have exactly one.
       #
       # @example
       #   # bad
@@ -40,6 +40,7 @@ module RuboCop
         MSG_WRITER = 'Do not prefix writer method names with `set_`.'
 
         def on_def(node)
+          return unless proper_attribute_name?(node)
           return unless bad_reader_name?(node) || bad_writer_name?(node)
 
           message = message(node)
@@ -56,6 +57,10 @@ module RuboCop
           elsif bad_writer_name?(node)
             MSG_WRITER
           end
+        end
+
+        def proper_attribute_name?(node)
+          !node.method_name.to_s.end_with?('!', '?', '=')
         end
 
         def bad_reader_name?(node)

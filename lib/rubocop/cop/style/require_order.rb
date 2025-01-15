@@ -88,10 +88,7 @@ module RuboCop
           return unless previous_older_sibling
 
           add_offense(node, message: format(MSG, name: node.method_name)) do |corrector|
-            corrector.swap(
-              range_with_comments_and_lines(previous_older_sibling),
-              range_with_comments_and_lines(node.parent.if_type? ? node.parent : node)
-            )
+            autocorrect(corrector, node, previous_older_sibling)
           end
         end
 
@@ -106,12 +103,21 @@ module RuboCop
             next unless sibling.is_a?(AST::Node)
 
             sibling = sibling_node(sibling)
-            break unless sibling&.send_type? && sibling&.method?(node.method_name)
+            break unless sibling&.send_type? && sibling.method?(node.method_name)
             break unless sibling.arguments? && !sibling.receiver
             break unless in_same_section?(sibling, node)
+            break unless node.first_argument.str_type? && sibling.first_argument.str_type?
 
-            node.first_argument.source < sibling.first_argument.source
+            node.first_argument.value < sibling.first_argument.value
           end
+        end
+
+        def autocorrect(corrector, node, previous_older_sibling)
+          range1 = range_with_comments_and_lines(previous_older_sibling)
+          range2 = range_with_comments_and_lines(node.parent.if_type? ? node.parent : node)
+
+          corrector.remove(range2)
+          corrector.insert_before(range1, range2.source)
         end
 
         def search_node(node)
@@ -125,9 +131,7 @@ module RuboCop
         end
 
         def in_same_section?(node1, node2)
-          !node1.location.expression.with(
-            end_pos: node2.location.expression.end_pos
-          ).source.include?("\n\n")
+          !node1.source_range.join(node2.source_range.end).source.include?("\n\n")
         end
       end
     end

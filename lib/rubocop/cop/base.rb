@@ -53,23 +53,27 @@ module RuboCop
       # List of cops that should not try to autocorrect at the same
       # time as this cop
       #
-      # @return [Array<RuboCop::Cop::Cop>]
+      # @return [Array<RuboCop::Cop::Base>]
       #
       # @api public
       def self.autocorrect_incompatible_with
         []
       end
 
-      # Cops (other than builtin) are encouraged to implement this
+      # Returns a url to view this cops documentation online.
+      # Requires 'DocumentationBaseURL' to be set for your department.
+      # Will follow the convention of RuboCops own documentation structure,
+      # overwrite this method to accommodate your custom layout.
       # @return [String, nil]
       #
       # @api public
-      def self.documentation_url
-        Documentation.url_for(self) if builtin?
+      def self.documentation_url(config = nil)
+        Documentation.url_for(self, config)
       end
 
       def self.inherited(subclass)
         super
+        subclass.instance_variable_set(:@gem_requirements, gem_requirements.dup)
         Registry.global.enlist(subclass)
       end
 
@@ -126,6 +130,29 @@ module RuboCop
         false
       end
 
+      ## Gem requirements
+
+      @gem_requirements = {}
+
+      class << self
+        attr_reader :gem_requirements
+
+        # Register a version requirement for the given gem name.
+        # This cop will be skipped unless the target satisfies *all* requirements.
+        # @param [String] gem_name
+        # @param [Array<String>] version_requirements The version requirements,
+        #   using the same syntax as a Gemfile, e.g. ">= 1.2.3"
+        #
+        #   If omitted, any version of the gem will be accepted.
+        #
+        #   https://guides.rubygems.org/patterns/#declaring-dependencies
+        #
+        # @api public
+        def requires_gem(gem_name, *version_requirements)
+          @gem_requirements[gem_name] = Gem::Requirement.new(version_requirements)
+        end
+      end
+
       def initialize(config = nil, options = nil)
         @config = config || Config.new
         @options = options || { debug: false }
@@ -162,7 +189,9 @@ module RuboCop
       def add_global_offense(message = nil, severity: nil)
         severity = find_severity(nil, severity)
         message = find_message(nil, message)
-        current_offenses << Offense.new(severity, Offense::NO_LOCATION, message, name, :unsupported)
+        range = Offense::NO_LOCATION
+        status = enabled_line?(range.line) ? :unsupported : :disabled
+        current_offenses << Offense.new(severity, range, message, name, status)
       end
 
       # Adds an offense on the specified range (or node with an expression)
@@ -232,6 +261,16 @@ module RuboCop
         @config.target_ruby_version
       end
 
+      # Returns a gems locked versions (i.e. from Gemfile.lock or gems.locked)
+      # @returns [Gem::Version | nil] The locked gem version, or nil if the gem is not present.
+      def target_gem_version(gem_name)
+        @config.gem_versions_in_target && @config.gem_versions_in_target[gem_name]
+      end
+
+      def parser_engine
+        @config.parser_engine
+      end
+
       def target_rails_version
         @config.target_rails_version
       end
@@ -240,7 +279,12 @@ module RuboCop
         @config.active_support_extensions_enabled?
       end
 
+      def string_literals_frozen_by_default?
+        @config.string_literals_frozen_by_default?
+      end
+
       def relevant_file?(file)
+        return false unless target_satisfies_all_gem_version_requirements?
         return true unless @config.clusivity_config_for_badge?(self.class.badge)
 
         file == RuboCop::AST::ProcessedSource::STRING_SOURCE_NAME ||
@@ -254,7 +298,7 @@ module RuboCop
 
       # There should be very limited reasons for a Cop to do it's own parsing
       def parse(source, path = nil)
-        ProcessedSource.new(source, target_ruby_version, path)
+        ProcessedSource.new(source, target_ruby_version, path, parser_engine: parser_engine)
       end
 
       # @api private
@@ -284,8 +328,12 @@ module RuboCop
       # @api private
       def self.callbacks_needed
         @callbacks_needed ||= public_instance_methods.select do |m|
-          m.match?(/^on_|^after_/) &&
-            !Base.method_defined?(m) # exclude standard "callbacks" like 'on_begin_investigation'
+          # OPTIMIZE: Check method existence first to make fewer `start_with?` calls.
+          # At the time of writing this comment, this excludes 98 of ~104 methods.
+          # `start_with?` with two string arguments instead of a regex is faster
+          # in this specific case as well.
+          !Base.method_defined?(m) && # exclude standard "callbacks" like 'on_begin_investigation'
+            m.start_with?('on_', 'after_')
         end
       end
       # rubocop:enable Layout/ClassStructure
@@ -303,6 +351,21 @@ module RuboCop
         # because `processed_source` here may be an embedded code in it.
         @current_offset = offset
         @current_original = original
+      end
+
+      # @api private
+      def always_autocorrect?
+        # `true` is the same as `'always'` for backward compatibility.
+        ['always', true].include?(cop_config.fetch('AutoCorrect', 'always'))
+      end
+
+      # @api private
+      def contextual_autocorrect?
+        cop_config.fetch('AutoCorrect', 'always') == 'contextual'
+      end
+
+      def inspect # :nodoc:
+        "#<#{self.class.name}:#{object_id} @config=#{@config} @options=#{@options}>"
       end
 
       private
@@ -352,16 +415,6 @@ module RuboCop
 
       ### Actually private methods
 
-      # rubocop:disable Layout/ClassStructure
-      def self.builtin?
-        return false unless (m = instance_methods(false).first) # any custom method will do
-
-        path, _line = instance_method(m).source_location
-        path.start_with?(__dir__)
-      end
-      private_class_method :builtin?
-      # rubocop:enable Layout/ClassStructure
-
       def reset_investigation
         @currently_disabled_lines = @current_offenses = @processed_source = @current_corrector = nil
       end
@@ -385,7 +438,7 @@ module RuboCop
       def use_corrector(range, corrector)
         if autocorrect?
           attempt_correction(range, corrector)
-        elsif corrector && cop_config.fetch('AutoCorrect', true)
+        elsif corrector && (always_autocorrect? || (contextual_autocorrect? && !LSP.enabled?))
           :uncorrected
         else
           :unsupported
@@ -416,7 +469,7 @@ module RuboCop
 
       def range_from_node_or_range(node_or_range)
         if node_or_range.respond_to?(:loc)
-          node_or_range.loc.expression
+          node_or_range.source_range
         elsif node_or_range.is_a?(::Parser::Source::Range)
           node_or_range
         else
@@ -476,6 +529,18 @@ module RuboCop
           range.begin_pos + @current_offset,
           range.end_pos + @current_offset
         )
+      end
+
+      def target_satisfies_all_gem_version_requirements?
+        self.class.gem_requirements.all? do |gem_name, version_req|
+          all_gem_versions_in_target = @config.gem_versions_in_target
+          next false unless all_gem_versions_in_target
+
+          gem_version_in_target = all_gem_versions_in_target[gem_name]
+          next false unless gem_version_in_target
+
+          version_req.satisfied_by?(gem_version_in_target)
+        end
       end
     end
   end

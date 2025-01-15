@@ -9,6 +9,87 @@ RSpec.describe RuboCop::Cop::InternalAffairs::ExampleDescription, :config do
           expect_offense('code')
         end
       RUBY
+
+      expect_correction(<<~RUBY)
+        it 'registers an offense' do
+          expect_offense('code')
+        end
+      RUBY
+    end
+
+    it 'registers an offense when given an improper description for `registers no offense`' do
+      expect_offense(<<~RUBY)
+        it 'registers no offense' do
+           ^^^^^^^^^^^^^^^^^^^^^^ Description does not match use of `expect_offense`.
+          expect_offense('code')
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        it 'registers an offense' do
+          expect_offense('code')
+        end
+      RUBY
+    end
+
+    it 'registers an offense when given an improper description with single option' do
+      expect_offense(<<~RUBY)
+        it 'does not register an offense', :ruby30 do
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Description does not match use of `expect_offense`.
+          expect_offense('code')
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        it 'registers an offense', :ruby30 do
+          expect_offense('code')
+        end
+      RUBY
+    end
+
+    it 'registers an offense when given an improper description with multiple options' do
+      expect_offense(<<~RUBY)
+        it 'does not register an offense', :ruby30, :rails70 do
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Description does not match use of `expect_offense`.
+          expect_offense('code')
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        it 'registers an offense', :ruby30, :rails70 do
+          expect_offense('code')
+        end
+      RUBY
+    end
+
+    it 'registers an offense when given an improper description for `accepts`' do
+      expect_offense(<<~RUBY)
+        it 'accepts the case' do
+           ^^^^^^^^^^^^^^^^^^ Description does not match use of `expect_offense`.
+          expect_offense('code')
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        it 'registers the case' do
+          expect_offense('code')
+        end
+      RUBY
+    end
+
+    it 'registers an offense when given an improper description for `register`' do
+      expect_offense(<<~RUBY)
+        it 'register the case' do
+           ^^^^^^^^^^^^^^^^^^^ Description does not match use of `expect_offense`.
+          expect_offense('code')
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        it 'registers the case' do
+          expect_offense('code')
+        end
+      RUBY
     end
 
     it 'does not register an offense when given a proper description' do
@@ -29,10 +110,31 @@ RSpec.describe RuboCop::Cop::InternalAffairs::ExampleDescription, :config do
   end
 
   context 'with `expect_no_offenses`' do
-    it 'registers an offense when given an improper description' do
+    it 'registers an offense when given an improper description for `registers`' do
       expect_offense(<<~RUBY)
         it 'registers an offense' do
            ^^^^^^^^^^^^^^^^^^^^^^ Description does not match use of `expect_no_offenses`.
+          expect_no_offenses('code')
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        it 'does not register an offense' do
+          expect_no_offenses('code')
+        end
+      RUBY
+    end
+
+    it 'registers an offense when given an improper description for `handles`' do
+      expect_offense(<<~RUBY)
+        it 'handles the case' do
+           ^^^^^^^^^^^^^^^^^^ Description does not match use of `expect_no_offenses`.
+          expect_no_offenses('code')
+        end
+      RUBY
+
+      expect_correction(<<~RUBY)
+        it 'does not register the case' do
           expect_no_offenses('code')
         end
       RUBY
@@ -125,6 +227,18 @@ RSpec.describe RuboCop::Cop::InternalAffairs::ExampleDescription, :config do
     it 'does not register an offense' do
       expect_no_offenses(<<~RUBY)
         it 'registers an offense' do
+        end
+      RUBY
+    end
+  end
+
+  context 'when given a proper description in `aggregate_failures` block' do
+    it 'does not register an offense' do
+      expect_no_offenses(<<~RUBY)
+        it 'does not register an offense' do
+          aggregate_failures do
+            expect_no_offenses(code)
+          end
         end
       RUBY
     end

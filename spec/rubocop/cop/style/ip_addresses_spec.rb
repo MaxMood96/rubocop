@@ -64,7 +64,7 @@ RSpec.describe RuboCop::Cop::Style::IpAddresses, :config do
       expect_no_offenses('"2001:db8::1xyz"')
     end
 
-    context 'the unspecified address :: (shortform of 0:0:0:0:0:0:0:0)' do
+    context 'the unspecified address :: (short-form of 0:0:0:0:0:0:0:0)' do
       it 'does not register an offense' do
         expect_no_offenses('"::"')
       end
@@ -85,7 +85,7 @@ RSpec.describe RuboCop::Cop::Style::IpAddresses, :config do
   context 'with allowed addresses' do
     let(:cop_config) { { 'AllowedAddresses' => ['a::b'] } }
 
-    it 'does not register an offense for a allowed addresses' do
+    it 'does not register an offense for an allowed address' do
       expect_no_offenses('"a::b"')
     end
 

@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 RSpec.describe RuboCop::Cop::Style::CaseLikeIf, :config do
+  let(:cop_config) { { 'MinBranchesCount' => 2 } }
+
   it 'registers an offense and corrects when using `===`' do
     expect_offense(<<~RUBY)
       if Integer === x
@@ -53,6 +55,26 @@ RSpec.describe RuboCop::Cop::Style::CaseLikeIf, :config do
       when CONSTANT1
       when CONSTANT2
       else
+      end
+    RUBY
+  end
+
+  it 'registers an offense when using `==` with literal and using ternary operator' do
+    expect_offense(<<~RUBY)
+      if foo == 1
+      ^^^^^^^^^^^ Convert `if-elsif` to `case-when`.
+      elsif foo == 2
+      else
+        foo == 3 ? bar : baz
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      case foo
+      when 1
+      when 2
+      else
+        foo == 3 ? bar : baz
       end
     RUBY
   end
@@ -430,6 +452,19 @@ RSpec.describe RuboCop::Cop::Style::CaseLikeIf, :config do
         case foo
         when /(?<name>.*)/
         when 123
+        end
+      RUBY
+    end
+  end
+
+  context 'MinBranchesCount: 3' do
+    let(:cop_config) { { 'MinBranchesCount' => 3 } }
+
+    it 'does not register an offense when branches count is less than required' do
+      expect_no_offenses(<<~RUBY)
+        if x == 1
+        elsif x == 2
+        else
         end
       RUBY
     end

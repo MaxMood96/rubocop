@@ -32,14 +32,14 @@ RSpec.describe RuboCop::Formatter::JUnitFormatter, :config do
     end
 
     it 'displays end of parsable text' do
-      expect(output.string).to end_with(<<~XML.chop)
+      expect(output.string).to end_with(<<~XML)
           </testsuite>
         </testsuites>
       XML
     end
 
-    it "displays an offense for `classname='test_1` in parsable text" do
-      expect(output.string.include?(<<-XML)).to be(true)
+    it "displays an offense for `classname='test_1'` in parsable text" do
+      expect(output.string).to include(<<-XML)
     <testcase classname='test_1' name='Layout/SpaceInsideBlockBraces'>
       <failure type='Layout/SpaceInsideBlockBraces' message='message 1'>
         test:1:1
@@ -51,8 +51,8 @@ RSpec.describe RuboCop::Formatter::JUnitFormatter, :config do
       XML
     end
 
-    it "displays an offense for `classname='test_2` in parsable text" do
-      expect(output.string.include?(<<-XML)).to be(true)
+    it "displays an offense for `classname='test_2'` in parsable text" do
+      expect(output.string).to include(<<-XML)
     <testcase classname='test_2' name='Layout/SpaceInsideBlockBraces'>
       <failure type='Layout/SpaceInsideBlockBraces' message='message 1'>
         test:1:1
@@ -65,7 +65,7 @@ RSpec.describe RuboCop::Formatter::JUnitFormatter, :config do
     end
 
     it 'displays a non-offense element in parsable text' do
-      expect(output.string.include?(<<~XML)).to be(true)
+      expect(output.string).to include(<<~XML)
         <testcase classname='test_1' name='Style/Alias'/>
       XML
     end

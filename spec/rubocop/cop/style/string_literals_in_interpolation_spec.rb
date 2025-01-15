@@ -4,7 +4,7 @@ RSpec.describe RuboCop::Cop::Style::StringLiteralsInInterpolation, :config do
   context 'configured with single quotes preferred' do
     let(:cop_config) { { 'EnforcedStyle' => 'single_quotes' } }
 
-    it 'registers an offense for double quotes within embedded expression' do
+    it 'registers an offense for double quotes within embedded expression in a string' do
       expect_offense(<<~'RUBY')
         "#{"A"}"
            ^^^ Prefer single-quoted strings inside interpolations.
@@ -12,6 +12,17 @@ RSpec.describe RuboCop::Cop::Style::StringLiteralsInInterpolation, :config do
 
       expect_correction(<<~'RUBY')
         "#{'A'}"
+      RUBY
+    end
+
+    it 'registers an offense for double quotes within embedded expression in a symbol' do
+      expect_offense(<<~'RUBY')
+        :"#{"A"}"
+            ^^^ Prefer single-quoted strings inside interpolations.
+      RUBY
+
+      expect_correction(<<~'RUBY')
+        :"#{'A'}"
       RUBY
     end
 
@@ -28,6 +39,18 @@ RSpec.describe RuboCop::Cop::Style::StringLiteralsInInterpolation, :config do
         #{'A'}
         RUBY
       SOURCE
+    end
+
+    it 'registers an offense for double quotes within a regexp' do
+      expect_offense(<<~'RUBY')
+        /foo#{"sar".sub("s", 'b')}/
+              ^^^^^ Prefer single-quoted strings inside interpolations.
+                        ^^^ Prefer single-quoted strings inside interpolations.
+      RUBY
+
+      expect_correction(<<~'RUBY')
+        /foo#{'sar'.sub('s', 'b')}/
+      RUBY
     end
 
     it 'accepts double quotes on a static string' do
@@ -66,7 +89,7 @@ RSpec.describe RuboCop::Cop::Style::StringLiteralsInInterpolation, :config do
   context 'configured with double quotes preferred' do
     let(:cop_config) { { 'EnforcedStyle' => 'double_quotes' } }
 
-    it 'registers an offense for single quotes within embedded expression' do
+    it 'registers an offense for single quotes within embedded expression in a string' do
       expect_offense(<<~'RUBY')
         "#{'A'}"
            ^^^ Prefer double-quoted strings inside interpolations.
@@ -74,6 +97,17 @@ RSpec.describe RuboCop::Cop::Style::StringLiteralsInInterpolation, :config do
 
       expect_correction(<<~'RUBY')
         "#{"A"}"
+      RUBY
+    end
+
+    it 'registers an offense for single quotes within embedded expression in a symbol' do
+      expect_offense(<<~'RUBY')
+        :"#{'A'}"
+            ^^^ Prefer double-quoted strings inside interpolations.
+      RUBY
+
+      expect_correction(<<~'RUBY')
+        :"#{"A"}"
       RUBY
     end
 

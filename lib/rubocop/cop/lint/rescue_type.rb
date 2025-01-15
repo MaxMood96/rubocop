@@ -42,15 +42,11 @@ module RuboCop
         INVALID_TYPES = %i[array dstr float hash nil int str sym].freeze
 
         def on_resbody(node)
-          rescued, _, _body = *node
-          return if rescued.nil?
-
-          exceptions = *rescued
-          invalid_exceptions = invalid_exceptions(exceptions)
+          invalid_exceptions = invalid_exceptions(node.exceptions)
           return if invalid_exceptions.empty?
 
           add_offense(
-            node.loc.keyword.join(rescued.loc.expression),
+            node.loc.keyword.join(node.children.first.source_range),
             message: format(MSG, invalid_exceptions: invalid_exceptions.map(&:source).join(', '))
           ) do |corrector|
             autocorrect(corrector, node)
@@ -58,10 +54,8 @@ module RuboCop
         end
 
         def autocorrect(corrector, node)
-          rescued, _, _body = *node
-          range = Parser::Source::Range.new(node.loc.expression.source_buffer,
-                                            node.loc.keyword.end_pos,
-                                            rescued.loc.expression.end_pos)
+          rescued = node.children.first
+          range = node.loc.keyword.end.join(rescued.source_range.end)
 
           corrector.replace(range, correction(*rescued))
         end

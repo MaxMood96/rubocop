@@ -3,7 +3,7 @@
 RSpec.describe RuboCop::Formatter::EmacsStyleFormatter, :config do
   subject(:formatter) { described_class.new(output) }
 
-  let(:cop_class) { RuboCop::Cop::Cop }
+  let(:cop_class) { RuboCop::Cop::Base }
   let(:source) { %w[a b cdefghi].join("\n") }
   let(:output) { StringIO.new }
 
@@ -11,18 +11,12 @@ RSpec.describe RuboCop::Formatter::EmacsStyleFormatter, :config do
 
   describe '#file_finished' do
     it 'displays parsable text' do
-      cop.add_offense(
-        nil,
-        location: Parser::Source::Range.new(source_buffer, 0, 1),
-        message: 'message 1'
-      )
-      cop.add_offense(
-        nil,
-        location: Parser::Source::Range.new(source_buffer, 9, 10),
-        message: 'message 2'
+      cop.add_offense(Parser::Source::Range.new(source_buffer, 0, 1), message: 'message 1')
+      offenses = cop.add_offense(
+        Parser::Source::Range.new(source_buffer, 9, 10), message: 'message 2'
       )
 
-      formatter.file_finished('test', cop.offenses)
+      formatter.file_finished('test', offenses)
       expect(output.string).to eq <<~OUTPUT
         test:1:1: C: message 1
         test:3:6: C: message 2
@@ -46,7 +40,7 @@ RSpec.describe RuboCop::Formatter::EmacsStyleFormatter, :config do
 
       it 'prints [Corrected] along with message' do
         formatter.file_finished(file, [offense])
-        expect(output.string.include?(': [Corrected] This is a message.')).to be(true)
+        expect(output.string).to include(': [Corrected] This is a message.')
       end
     end
 
@@ -67,7 +61,7 @@ RSpec.describe RuboCop::Formatter::EmacsStyleFormatter, :config do
 
       it 'prints [Todo] along with message' do
         formatter.file_finished(file, [offense])
-        expect(output.string.include?(': [Todo] This is a message.')).to be(true)
+        expect(output.string).to include(': [Todo] This is a message.')
       end
     end
 
@@ -100,7 +94,7 @@ RSpec.describe RuboCop::Formatter::EmacsStyleFormatter, :config do
   describe '#finished' do
     it 'does not report summary' do
       formatter.finished(['/path/to/file'])
-      expect(output.string.empty?).to be(true)
+      expect(output.string).to be_empty
     end
   end
 end

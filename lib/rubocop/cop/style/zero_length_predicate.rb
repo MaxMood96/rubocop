@@ -4,10 +4,13 @@ module RuboCop
   module Cop
     module Style
       # Checks for numeric comparisons that can be replaced
-      # by a predicate method, such as receiver.length == 0,
-      # receiver.length > 0, receiver.length != 0,
-      # receiver.length < 1 and receiver.size == 0 that can be
-      # replaced by receiver.empty? and !receiver.empty?.
+      # by a predicate method, such as `receiver.length == 0`,
+      # `receiver.length > 0`, and `receiver.length != 0`,
+      # `receiver.length < 1` and `receiver.size == 0` that can be
+      # replaced by `receiver.empty?` and `!receiver.empty?`.
+      #
+      # NOTE: `File`, `Tempfile`, and `StringIO` do not have `empty?`
+      # so allow `size == 0` and `size.zero?`.
       #
       # @safety
       #   This cop is unsafe because it cannot be guaranteed that the receiver
@@ -45,13 +48,19 @@ module RuboCop
           check_nonzero_length_comparison(node)
         end
 
+        def on_csend(node)
+          check_zero_length_predicate(node)
+          check_zero_length_comparison(node)
+        end
+
         private
 
         def check_zero_length_predicate(node)
-          return unless (length_method = zero_length_predicate(node.parent))
+          return unless zero_length_predicate?(node.parent)
+          return if non_polymorphic_collection?(node.parent)
 
           offense = node.loc.selector.join(node.parent.source_range.end)
-          message = format(ZERO_MSG, current: "#{length_method}.zero?")
+          message = format(ZERO_MSG, current: offense.source)
 
           add_offense(offense, message: message) do |corrector|
             corrector.replace(offense, 'empty?')
@@ -88,44 +97,47 @@ module RuboCop
           end
         end
 
-        # @!method zero_length_predicate(node)
-        def_node_matcher :zero_length_predicate, <<~PATTERN
-          (send (send (...) ${:length :size}) :zero?)
+        # @!method zero_length_predicate?(node)
+        def_node_matcher :zero_length_predicate?, <<~PATTERN
+          (call (call (...) {:length :size}) :zero?)
         PATTERN
 
         # @!method zero_length_comparison(node)
         def_node_matcher :zero_length_comparison, <<~PATTERN
-          {(send (send (...) ${:length :size}) $:== (int $0))
-           (send (int $0) $:== (send (...) ${:length :size}))
-           (send (send (...) ${:length :size}) $:<  (int $1))
-           (send (int $1) $:> (send (...) ${:length :size}))}
+          {(call (call (...) ${:length :size}) $:== (int $0))
+           (call (int $0) $:== (call (...) ${:length :size}))
+           (call (call (...) ${:length :size}) $:<  (int $1))
+           (call (int $1) $:> (call (...) ${:length :size}))}
         PATTERN
 
         # @!method nonzero_length_comparison(node)
         def_node_matcher :nonzero_length_comparison, <<~PATTERN
-          {(send (send (...) ${:length :size}) ${:> :!=} (int $0))
-           (send (int $0) ${:< :!=} (send (...) ${:length :size}))}
+          {(call (call (...) ${:length :size}) ${:> :!=} (int $0))
+           (call (int $0) ${:< :!=} (call (...) ${:length :size}))}
         PATTERN
 
         def replacement(node)
-          receiver = zero_length_receiver(node)
-          return "#{receiver.source}.empty?" if receiver
+          length_node = zero_length_node(node)
+          if length_node&.receiver
+            return "#{length_node.receiver.source}#{length_node.loc.dot.source}empty?"
+          end
 
-          "!#{other_receiver(node).source}.empty?"
+          other_length_node = other_length_node(node)
+          "!#{other_length_node.receiver.source}#{other_length_node.loc.dot.source}empty?"
         end
 
-        # @!method zero_length_receiver(node)
-        def_node_matcher :zero_length_receiver, <<~PATTERN
-          {(send (send $_ _) :== (int 0))
-           (send (int 0) :== (send $_ _))
-           (send (send $_ _) :<  (int 1))
-           (send (int 1) :> (send $_ _))}
+        # @!method zero_length_node(node)
+        def_node_matcher :zero_length_node, <<~PATTERN
+          {(send $(call _ _) :== (int 0))
+           (send (int 0) :== $(call _ _))
+           (send $(call _ _) :<  (int 1))
+           (send (int 1) :> $(call _ _))}
         PATTERN
 
-        # @!method other_receiver(node)
-        def_node_matcher :other_receiver, <<~PATTERN
-          {(send (send $_ _) _ _)
-           (send _ _ (send $_ _))}
+        # @!method other_length_node(node)
+        def_node_matcher :other_length_node, <<~PATTERN
+          {(call $(call _ _) _ _)
+           (call _ _ $(call _ _))}
         PATTERN
 
         # Some collection like objects in the Ruby standard library
@@ -134,7 +146,7 @@ module RuboCop
         # @!method non_polymorphic_collection?(node)
         def_node_matcher :non_polymorphic_collection?, <<~PATTERN
           {(send (send (send (const {nil? cbase} :File) :stat _) ...) ...)
-           (send (send (send (const {nil? cbase} {:Tempfile :StringIO}) {:new :open} ...) ...) ...)}
+           (send (send (send (const {nil? cbase} {:File :Tempfile :StringIO}) {:new :open} ...) ...) ...)}
         PATTERN
       end
     end

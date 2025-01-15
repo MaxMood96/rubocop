@@ -238,7 +238,7 @@ RSpec.describe RuboCop::Cop::Style::HashTransformValues, :config do
       RUBY
     end
 
-    it 'register and corrects an offense _.to_h{...} when value is a hash literal and is enclosed in braces' do
+    it 'registers and corrects an offense _.to_h{...} when value is a hash literal and is enclosed in braces' do
       expect_offense(<<~RUBY)
         {a: 1, b: 2}.to_h { |key, val| [key, { value: val }] }
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Prefer `transform_values` over `to_h {...}`.
@@ -249,7 +249,7 @@ RSpec.describe RuboCop::Cop::Style::HashTransformValues, :config do
       RUBY
     end
 
-    it 'register and corrects an offense _.to_h{...} when value is a hash literal and is not enclosed in braces' do
+    it 'registers and corrects an offense _.to_h{...} when value is a hash literal and is not enclosed in braces' do
       expect_offense(<<~RUBY)
         {a: 1, b: 2}.to_h { |key, val| [key, value: val] }
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Prefer `transform_values` over `to_h {...}`.
@@ -297,13 +297,13 @@ RSpec.describe RuboCop::Cop::Style::HashTransformValues, :config do
     end
   end
 
-  context 'below Ruby 2.4', :ruby23 do
+  context 'below Ruby 2.4', :ruby23, unsupported_on: :prism do
     it 'does not flag even if transform_values could be used' do
       expect_no_offenses('x.each_with_object({}) {|(k, v), h| h[k] = foo(v)}')
     end
   end
 
-  context 'below Ruby 2.6', :ruby25 do
+  context 'below Ruby 2.6', :ruby25, unsupported_on: :prism do
     it 'does not flag _.to_h{...}' do
       expect_no_offenses(<<~RUBY)
         x.to_h {|k, v| [k, foo(v)]}

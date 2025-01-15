@@ -16,7 +16,7 @@ module RuboCop
                       'root of the project. RuboCop will use this path to determine which ' \
                       'cops are enabled (via eg. Include/Exclude), and so that certain cops ' \
                       'like Naming/FileName can be checked.'
-    EXITING_OPTIONS = %i[version verbose_version show_cops show_docs_url].freeze
+    EXITING_OPTIONS = %i[version verbose_version show_cops show_docs_url lsp].freeze
     DEFAULT_MAXIMUM_EXCLUSION_ITEMS = 15
 
     def initialize
@@ -49,12 +49,14 @@ module RuboCop
 
     private
 
+    # rubocop:disable Metrics/AbcSize
     def define_options
       OptionParser.new do |opts|
         opts.banner = rainbow.wrap('Usage: rubocop [options] [file1, file2, ...]').bright
 
         add_check_options(opts)
         add_cache_options(opts)
+        add_lsp_option(opts)
         add_server_options(opts)
         add_output_options(opts)
         add_autocorrection_options(opts)
@@ -66,6 +68,7 @@ module RuboCop
         add_profile_options(opts) if RUBY_ENGINE == 'ruby' && !Platform.windows?
       end
     end
+    # rubocop:enable Metrics/AbcSize
 
     def add_check_options(opts) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       section(opts, 'Basic Options') do # rubocop:disable Metrics/BlockLength
@@ -92,6 +95,7 @@ module RuboCop
         option(opts, '--ignore-unrecognized-cops')
         option(opts, '--force-default-config')
         option(opts, '-s', '--stdin FILE')
+        option(opts, '--editor-mode')
         option(opts, '-P', '--[no-]parallel')
         option(opts, '--raise-cop-error')
         add_severity_option(opts)
@@ -182,7 +186,10 @@ module RuboCop
           raise OptionArgumentError, message
         end
 
-        @options[:"#{option}"] = list.empty? ? [''] : list.split(',')
+        cop_names = list.empty? ? [''] : list.split(',')
+        cop_names.unshift('Lint/Syntax') if option == 'only' && !cop_names.include?('Lint/Syntax')
+
+        @options[:"#{option}"] = cop_names
       end
     end
 
@@ -199,6 +206,12 @@ module RuboCop
       section(opts, 'Caching') do
         option(opts, '-C', '--cache FLAG')
         option(opts, '--cache-root DIR') { @validator.validate_cache_enabled_for_cache_root }
+      end
+    end
+
+    def add_lsp_option(opts)
+      section(opts, 'LSP Option') do
+        option(opts, '--lsp')
       end
     end
 
@@ -352,15 +365,12 @@ module RuboCop
         raise OptionArgumentError, '-C/--cache argument must be true or false'
       end
 
-      if display_only_fail_level_offenses_with_autocorrect?
-        raise OptionArgumentError, '--autocorrect cannot be used with ' \
-                                   '--display-only-fail-level-offenses.'
-      end
       validate_auto_gen_config
       validate_autocorrect
       validate_display_only_failed
       validate_display_only_failed_and_display_only_correctable
       validate_display_only_correctable_and_autocorrect
+      validate_lsp_and_editor_mode
       disable_parallel_when_invalid_option_combo
 
       return if incompatible_options.size <= 1
@@ -408,6 +418,13 @@ module RuboCop
             format('--display-only-failed cannot be used together with other display options.')
     end
 
+    def validate_lsp_and_editor_mode
+      return if !@options.key?(:lsp) || !@options.key?(:editor_mode)
+
+      raise OptionArgumentError,
+            format('Do not specify `--editor-mode` as it is redundant in `--lsp`.')
+    end
+
     def validate_autocorrect
       if @options.key?(:safe_autocorrect) && @options.key?(:autocorrect_all)
         message = Rainbow(<<~MESSAGE).red
@@ -446,10 +463,6 @@ module RuboCop
     def only_includes_redundant_disable?
       @options.key?(:only) &&
         (@options[:only] & %w[Lint/RedundantCopDisableDirective RedundantCopDisableDirective]).any?
-    end
-
-    def display_only_fail_level_offenses_with_autocorrect?
-      @options.key?(:display_only_fail_level_offenses) && @options.key?(:autocorrect)
     end
 
     def except_syntax?
@@ -560,13 +573,14 @@ module RuboCop
                                          'cops. Only valid for --format junit.'],
       display_only_fail_level_offenses:
                                         ['Only output offense messages at',
-                                         'the specified --fail-level or above'],
+                                         'the specified --fail-level or above.'],
       display_only_correctable:         ['Only output correctable offense messages.'],
       display_only_safe_correctable:    ['Only output safe-correctable offense messages',
                                          'when combined with --display-only-correctable.'],
       show_cops:                        ['Shows the given cops, or all cops by',
                                          'default, and their configurations for the',
-                                         'current directory.'],
+                                         'current directory.',
+                                         'You can use `*` as a wildcard.'],
       show_docs_url:                    ['Display url to documentation for the given',
                                          'cops, or base url by default.'],
       fail_fast:                        ['Inspect files in order of modification',
@@ -602,9 +616,13 @@ module RuboCop
       version:                          'Display version.',
       verbose_version:                  'Display verbose version.',
       parallel:                         ['Use available CPUs to execute inspection in',
-                                         'parallel. Default is true.'],
+                                         'parallel. Default is true.',
+                                         'You can specify the number of parallel processes using',
+                                         'the $PARALLEL_PROCESSOR_COUNT environment variable.'],
       stdin:                            ['Pipe source from STDIN, using FILE in offense',
                                          'reports. This is useful for editor integration.'],
+      editor_mode:                      ['Optimize real-time feedback in editors,',
+                                         'adjusting behaviors for editing experience.'],
       init:                             'Generate a .rubocop.yml file in the current directory.',
       server:                           ['If a server process has not been started yet, start',
                                          'the server process and execute inspection with server.',
@@ -617,11 +635,12 @@ module RuboCop
       stop_server:                      'Stop server process.',
       server_status:                    'Show server status.',
       no_detach:                        'Run the server process in the foreground.',
+      lsp:                              'Start a language server listening on STDIN.',
       raise_cop_error:                  ['Raise cop-related errors with cause and location.',
                                          'This is used to prevent cops from failing silently.',
                                          'Default is false.'],
-      profile:                          'Profile rubocop',
-      memory:                           'Profile rubocop memory usage'
+      profile:                          'Profile rubocop.',
+      memory:                           'Profile rubocop memory usage.'
     }.freeze
   end
   # rubocop:enable Metrics/ModuleLength

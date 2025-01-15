@@ -2,12 +2,10 @@
 
 RSpec.describe 'RuboCop Project', type: :feature do
   let(:cop_names) do
-    RuboCop::Cop::Cop
-      .registry
-      .without_department(:Test)
-      .without_department(:Test2)
+    RuboCop::Cop::Registry
+      .global
       .without_department(:InternalAffairs)
-      .cops
+      .reject { |cop| cop.cop_name.start_with?('Test/') }
       .map(&:cop_name)
   end
 
@@ -40,9 +38,8 @@ RSpec.describe 'RuboCop Project', type: :feature do
     it 'has a nicely formatted description for all cops' do
       cop_names.each do |name|
         description = config.dig(name, 'Description')
-        expect(description.nil?).to(be(false),
-                                    "`Description` configuration is required for `#{name}`.")
-        expect(description.include?("\n")).to be(false)
+        expect(description).not_to(be_nil, "`Description` configuration is required for `#{name}`.")
+        expect(description).not_to include("\n")
 
         start_with_subject = description.match(/\AThis cop (?<verb>.+?) .*/)
         suggestion = start_with_subject[:verb]&.capitalize if start_with_subject
@@ -56,8 +53,7 @@ RSpec.describe 'RuboCop Project', type: :feature do
     it 'requires a nicely formatted `VersionAdded` metadata for all cops' do
       cop_names.each do |name|
         version = config.dig(name, 'VersionAdded')
-        expect(version.nil?).to(be(false),
-                                "`VersionAdded` configuration is required for `#{name}`.")
+        expect(version).not_to(be_nil, "`VersionAdded` configuration is required for `#{name}`.")
         expect(version).to(match(version_regexp),
                            "#{version} should be format ('X.Y' or '<<next>>') for #{name}.")
       end
@@ -124,10 +120,51 @@ RSpec.describe 'RuboCop Project', type: :feature do
     end
     # rubocop:enable RSpec/NoExpectationExample
 
-    it 'does not include `Safe: true`' do
-      cop_names.each do |name|
-        safe = config.dig(name, 'Safe')
-        expect(safe).not_to be(true), "`#{name}` has unnecessary `Safe: true` config."
+    %w[Safe SafeAutoCorrect AutoCorrect].each do |metadata|
+      it "does not include `#{metadata}: true`" do
+        cop_names.each do |cop_name|
+          safe = config.dig(cop_name, metadata)
+          expect(safe).not_to be(true), "`#{cop_name}` has unnecessary `#{metadata}: true` config."
+        end
+      end
+    end
+
+    it 'does not include unnecessary `SafeAutoCorrect: false`' do
+      cop_names.each do |cop_name|
+        next unless config.dig(cop_name, 'Safe') == false
+
+        safe_autocorrect = config.dig(cop_name, 'SafeAutoCorrect')
+
+        expect(safe_autocorrect).not_to(
+          be(false), "`#{cop_name}` has unnecessary `SafeAutoCorrect: false` config."
+        )
+      end
+    end
+
+    it 'is expected that all cops documented with `@safety` are `Safe: false` or `SafeAutoCorrect: false`' do
+      require 'yard'
+
+      YARD::Registry.load!
+
+      unsafe_cops = YARD::Registry.all(:class).select do |example|
+        example.tags.any? { |tag| tag.tag_name == 'safety' }
+      end
+
+      unsafe_cop_names = unsafe_cops.map do |cop|
+        department_and_cop_names = cop.path.split('::')[2..] # Drop `RuboCop::Cop` from class name.
+
+        department_and_cop_names.join('/')
+      end
+
+      unsafe_cop_names.each do |cop_name|
+        cop_config = config[cop_name]
+        unsafe = cop_config['Safe'] == false || cop_config['SafeAutoCorrect'] == false
+
+        expect(unsafe).to(
+          be(true),
+          "`#{cop_name}` cop should be set `Safe: false` or `SafeAutoCorrect: false` " \
+          'because `@safety` YARD tag exists.'
+        )
       end
     end
   end
@@ -153,7 +190,7 @@ RSpec.describe 'RuboCop Project', type: :feature do
     let(:non_reference_lines) { lines.take_while { |line| !line.start_with?('[@') } }
 
     it 'has newline at end of file' do
-      expect(changelog.end_with?("\n")).to be true
+      expect(changelog).to end_with("\n")
     end
 
     it 'has either entries, headers, empty lines, or comments' do
@@ -165,19 +202,25 @@ RSpec.describe 'RuboCop Project', type: :feature do
         expect(entries).to all(match(/^\* \S/))
       end
 
+      it 'has one space between the period and the parentheses enclosing contributor name' do
+        # NOTE: For compatibility with outdated formats, if there's no contributor name,
+        # it checks that the line ends with a period.
+        expect(entries).to all(match(/(\. \(\[|\.\z)/))
+      end
+
       describe 'link to related issue' do
         let(:issues) do
-          entries.map do |entry|
+          entries.filter_map do |entry|
             entry.match(%r{
               (?<=^\*\s)
               \[(?<ref>(?:(?<repo>rubocop/[a-z_-]+)?\#(?<number>\d+))|.*)\]
               \((?<url>[^)]+)\)
             }x)
-          end.compact
+          end
         end
 
         it 'has a reference' do
-          issues.each { |issue| expect(issue[:ref].blank?).to be(false) }
+          issues.each { |issue| expect(issue[:ref]).not_to be_blank }
         end
 
         it 'has a valid issue number prefixed with #' do
@@ -197,6 +240,18 @@ RSpec.describe 'RuboCop Project', type: :feature do
           entries_including_issue_link = entries.select { |entry| entry.match(/^\*\s*\[/) }
 
           expect(entries_including_issue_link).to all(include('): '))
+        end
+      end
+
+      it 'has a single space after each comma in the list of multiple contributor names' do
+        entries.each do |entry|
+          contributors = entry.scan(/\(\[@\S+\]\[\](?:, \[@\S+\]\[\])*\)/)
+          contributors.each do |contributor|
+            expect(contributor).not_to(
+              match(/,\S/),
+              "Contributor names should have exactly one space after each comma: #{contributor}"
+            )
+          end
         end
       end
 
@@ -244,11 +299,9 @@ RSpec.describe 'RuboCop Project', type: :feature do
       end
 
       let(:existing_cop_names) do
-        RuboCop::Cop::Cop
-          .registry
-          .without_department(:Test)
-          .without_department(:Test2)
-          .cops
+        RuboCop::Cop::Registry
+          .global
+          .reject { |cop| cop.cop_name.start_with?('Test/') }
           .map(&:cop_name)
       end
 
@@ -257,6 +310,10 @@ RSpec.describe 'RuboCop Project', type: :feature do
       end
 
       dir = File.expand_path('../changelog', __dir__)
+
+      it 'does not have a directory' do
+        expect(Dir["#{dir}/*"]).to be_none { |path| File.directory?(path) }
+      end
 
       Dir["#{dir}/*.md"].each do |path|
         context "For #{path}" do
@@ -286,10 +343,20 @@ RSpec.describe 'RuboCop Project', type: :feature do
           it 'has valid cop name with backticks', :aggregate_failures do
             entries.each do |entry|
               entry.scan(%r{\b[A-Z]\w+(?:/[A-Z]\w+)+\b}) do |cop_name|
-                expect(allowed_cop_names.include?(cop_name))
-                  .to be(true), "Invalid cop name #{cop_name}."
-                expect(entry.include?("`#{cop_name}`"))
-                  .to be(true), "Missing backticks for #{cop_name}."
+                next if cop_name.split('/').first == 'AllCops'
+
+                expect(allowed_cop_names).to include(cop_name), "Invalid cop name #{cop_name}."
+                expect(entry).to include("`#{cop_name}`"), "Missing backticks for #{cop_name}."
+              end
+            end
+          end
+
+          it 'has cops in backticks with department', :aggregate_failures do
+            cop_names_without_department = allowed_cop_names.map { |name| name.split('/').last }
+            entries.each do |entry|
+              entry.scan(/`([A-Z]\w+)`/) do |cop_name, *|
+                expect(cop_names_without_department)
+                  .not_to include(cop_name), "Missing department for #{cop_name}."
               end
             end
           end
@@ -300,9 +367,9 @@ RSpec.describe 'RuboCop Project', type: :feature do
     it 'has link definitions for all implicit links' do
       implicit_link_names = changelog.scan(/\[([^\]]+)\]\[\]/).flatten.uniq
       implicit_link_names.each do |name|
-        expect(changelog.include?("[#{name}]: http"))
-          .to be(true), "missing a link for #{name}. " \
-                        'Please add this link to the bottom of the file.'
+        expect(changelog)
+          .to include("[#{name}]: http"), "missing a link for #{name}. " \
+                                          'Please add this link to the bottom of the file.'
       end
     end
 

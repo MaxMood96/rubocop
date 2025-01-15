@@ -17,6 +17,22 @@ RSpec.describe RuboCop::Cop::Metrics::ClassLength, :config do
     RUBY
   end
 
+  it 'registers an offense when a class with a singleton class definition has more than 5 lines' do
+    expect_offense(<<~RUBY)
+      class Test
+      ^^^^^^^^^^ Class has too many lines. [8/5]
+        class << self
+          a = 1
+          a = 2
+          a = 3
+          a = 4
+          a = 5
+          a = 6
+        end
+      end
+    RUBY
+  end
+
   it 'reports the correct beginning and end lines' do
     offenses = expect_offense(<<~RUBY)
       class Test
@@ -134,6 +150,25 @@ RSpec.describe RuboCop::Cop::Metrics::ClassLength, :config do
     end
   end
 
+  context 'with `--lsp` option', :lsp do
+    it 'reports the correct beginning and end lines' do
+      offenses = expect_offense(<<~RUBY)
+        class Test
+        ^^^^^^^^^^ Class has too many lines. [6/5]
+          a = 1
+          a = 2
+          a = 3
+          a = 4
+          a = 5
+          a = 6
+        end
+      RUBY
+
+      offense = offenses.first
+      expect(offense.location.last_line).to eq(1)
+    end
+  end
+
   context 'when CountComments is disabled' do
     it 'accepts classes that only contain comments' do
       expect_no_offenses(<<~RUBY)
@@ -207,6 +242,34 @@ RSpec.describe RuboCop::Cop::Metrics::ClassLength, :config do
     end
   end
 
+  context 'when singleton class' do
+    it 'rejects a class with more than 5 lines' do
+      expect_offense(<<~RUBY)
+        class << self
+        ^^^^^^^^^^^^^ Class has too many lines. [6/5]
+          a = 1
+          a = 2
+          a = 3
+          a = 4
+          a = 5
+          a = 6
+        end
+      RUBY
+    end
+
+    it 'accepts a class with 5 lines' do
+      expect_no_offenses(<<~RUBY)
+        class << self
+          a = 1
+          a = 2
+          a = 3
+          a = 4
+          a = 5
+        end
+      RUBY
+    end
+  end
+
   context 'when inspecting a class defined with Class.new' do
     it 'registers an offense' do
       expect_offense(<<~RUBY)
@@ -234,6 +297,38 @@ RSpec.describe RuboCop::Cop::Metrics::ClassLength, :config do
           a = 4
           a = 5
           a = 6
+        end
+      RUBY
+    end
+  end
+
+  context 'when inspecting a class defined with Class.new with chained assignments' do
+    it 'registers an offense' do
+      expect_offense(<<~RUBY)
+        Foo = Bar = Class.new do
+                    ^^^^^^^^^^^^ Class has too many lines. [6/5]
+          a(_1)
+          b(_1)
+          c(_1)
+          d(_1)
+          e(_1)
+          f(_1)
+        end
+      RUBY
+    end
+  end
+
+  context 'when inspecting a class defined with Class.new with chained assignments in class body' do
+    it 'registers an offense' do
+      expect_offense(<<~RUBY)
+        Foo = Class.new do
+              ^^^^^^^^^^^^ Class has too many lines. [6/5]
+          self.a = self::B = 1
+          b(_1)
+          c(_1)
+          d(_1)
+          e(_1)
+          f(_1)
         end
       RUBY
     end

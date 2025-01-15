@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 RSpec.describe RuboCop::Cop::Layout::EndOfLine, :config do
+  include EncodingHelper
+
   shared_examples 'all configurations' do
     it 'accepts an empty file' do
       expect_no_offenses('')
@@ -11,9 +13,9 @@ RSpec.describe RuboCop::Cop::Layout::EndOfLine, :config do
     it 'can inspect non-UTF-8 encoded source with proper encoding comment' do
       # Weird place to have a test on working with non-utf-8 encodings.
       # Encodings are not specific to the EndOfLine cop, so the test is better
-      # be moved somewhere more general ?
+      # be moved somewhere more general?
       # Also working with encodings is actually the responsibility of
-      # 'whitequark/parser' gem, not Rubocop itself so these test really belongs there(?)
+      # 'whitequark/parser' gem, not RuboCop itself so these test really belongs there(?)
 
       encoding = 'iso-8859-15'
       input = (+<<~RUBY).force_encoding(encoding)
@@ -93,10 +95,7 @@ RSpec.describe RuboCop::Cop::Layout::EndOfLine, :config do
 
     context 'and the default external encoding is US_ASCII' do
       around do |example|
-        orig_encoding = Encoding.default_external
-        Encoding.default_external = Encoding::US_ASCII
-        example.run
-        Encoding.default_external = orig_encoding
+        with_default_external_encoding(Encoding::US_ASCII) { example.run }
       end
 
       it 'does not crash on UTF-8 encoded non-ascii characters' do
@@ -155,10 +154,7 @@ RSpec.describe RuboCop::Cop::Layout::EndOfLine, :config do
 
     context 'and the default external encoding is US_ASCII' do
       around do |example|
-        orig_encoding = Encoding.default_external
-        Encoding.default_external = Encoding::US_ASCII
-        example.run
-        Encoding.default_external = orig_encoding
+        with_default_external_encoding(Encoding::US_ASCII) { example.run }
       end
 
       it 'does not crash on UTF-8 encoded non-ascii characters' do

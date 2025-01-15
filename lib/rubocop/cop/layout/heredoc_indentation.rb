@@ -6,9 +6,9 @@ module RuboCop
       # Checks the indentation of the here document bodies. The bodies
       # are indented one step.
       #
-      # Note: When ``Layout/LineLength``'s `AllowHeredoc` is false (not default),
+      # NOTE: When ``Layout/LineLength``'s `AllowHeredoc` is false (not default),
       #       this cop does not add any offenses for long here documents to
-      #       avoid `Layout/LineLength`'s offenses.
+      #       avoid ``Layout/LineLength``'s offenses.
       #
       # @example
       #   # bad
@@ -25,6 +25,9 @@ module RuboCop
         include Alignment
         include Heredoc
         extend AutoCorrector
+        extend TargetRubyVersion
+
+        minimum_target_ruby_version 2.3
 
         TYPE_MSG = 'Use %<indentation_width>d spaces for indentation in a ' \
                    'heredoc by using `<<~` instead of `%<current_indent_type>s`.'
@@ -115,7 +118,7 @@ module RuboCop
         end
 
         def adjust_minus(corrector, node)
-          heredoc_beginning = node.loc.expression.source
+          heredoc_beginning = node.source
           corrected = heredoc_beginning.sub(/<<-?/, '<<~')
           corrector.replace(node, corrected)
         end
@@ -139,7 +142,7 @@ module RuboCop
         end
 
         def base_indent_level(node)
-          base_line_num = node.loc.expression.line
+          base_line_num = node.source_range.line
           base_line = processed_source.lines[base_line_num - 1]
           indent_level(base_line)
         end

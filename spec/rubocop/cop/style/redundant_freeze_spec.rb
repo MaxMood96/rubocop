@@ -38,6 +38,9 @@ RSpec.describe RuboCop::Cop::Style::RedundantFreeze, :config do
   it_behaves_like 'mutable objects', '{ a: 1, b: 2 }'
   it_behaves_like 'mutable objects', "'str'"
   it_behaves_like 'mutable objects', '"top#{1 + 2}"'
+  it_behaves_like 'mutable objects', '"top#@foo"'
+  it_behaves_like 'mutable objects', '"top#@@foo"'
+  it_behaves_like 'mutable objects', '"top#$foo"'
   it_behaves_like 'mutable objects', "('a' + 'b')"
   it_behaves_like 'mutable objects', "('a' * 20)"
   it_behaves_like 'mutable objects', '(a + b)'
@@ -47,6 +50,50 @@ RSpec.describe RuboCop::Cop::Style::RedundantFreeze, :config do
 
   it 'allows .freeze on method call' do
     expect_no_offenses('TOP_TEST = Something.new.freeze')
+  end
+
+  context 'when `AllCops/StringLiteralsFrozenByDefault: true`' do
+    let(:config) do
+      RuboCop::Config.new('AllCops' => { 'StringLiteralsFrozenByDefault' => true })
+    end
+
+    context 'when the frozen string literal comment is missing' do
+      it_behaves_like 'immutable objects', '""'
+    end
+
+    context 'when the frozen string literal comment is true' do
+      let(:prefix) { '# frozen_string_literal: true' }
+
+      it_behaves_like 'immutable objects', '""'
+    end
+
+    context 'when the frozen string literal comment is false' do
+      let(:prefix) { '# frozen_string_literal: false' }
+
+      it_behaves_like 'mutable objects', '""'
+    end
+  end
+
+  context 'when `AllCops/StringLiteralsFrozenByDefault: false`' do
+    let(:config) do
+      RuboCop::Config.new('AllCops' => { 'StringLiteralsFrozenByDefault' => false })
+    end
+
+    context 'when the frozen string literal comment is missing' do
+      it_behaves_like 'mutable objects', '""'
+    end
+
+    context 'when the frozen string literal comment is true' do
+      let(:prefix) { '# frozen_string_literal: true' }
+
+      it_behaves_like 'immutable objects', '""'
+    end
+
+    context 'when the frozen string literal comment is false' do
+      let(:prefix) { '# frozen_string_literal: false' }
+
+      it_behaves_like 'mutable objects', '""'
+    end
   end
 
   context 'when the receiver is a string literal' do
@@ -59,18 +106,27 @@ RSpec.describe RuboCop::Cop::Style::RedundantFreeze, :config do
 
         context 'when the frozen string literal comment is missing' do
           it_behaves_like 'immutable objects', '"#{a}"'
+          it_behaves_like 'immutable objects', '"#@a"'
+          it_behaves_like 'immutable objects', '"#@@a"'
+          it_behaves_like 'immutable objects', '"#$a"'
         end
 
         context 'when the frozen string literal comment is true' do
           let(:prefix) { '# frozen_string_literal: true' }
 
           it_behaves_like 'immutable objects', '"#{a}"'
+          it_behaves_like 'immutable objects', '"#@a"'
+          it_behaves_like 'immutable objects', '"#@@a"'
+          it_behaves_like 'immutable objects', '"#$a"'
         end
 
         context 'when the frozen string literal comment is false' do
           let(:prefix) { '# frozen_string_literal: false' }
 
           it_behaves_like 'immutable objects', '"#{a}"'
+          it_behaves_like 'immutable objects', '"#@a"'
+          it_behaves_like 'immutable objects', '"#@@a"'
+          it_behaves_like 'immutable objects', '"#$a"'
         end
       end
     end
@@ -78,36 +134,54 @@ RSpec.describe RuboCop::Cop::Style::RedundantFreeze, :config do
     context 'Ruby 3.0 or higher', :ruby30 do
       context 'when the frozen string literal comment is missing' do
         it_behaves_like 'mutable objects', '"#{a}"'
+        it_behaves_like 'mutable objects', '"#@a"'
+        it_behaves_like 'mutable objects', '"#@@a"'
+        it_behaves_like 'mutable objects', '"#$a"'
       end
 
       context 'when the frozen string literal comment is true' do
         let(:prefix) { '# frozen_string_literal: true' }
 
         it_behaves_like 'mutable objects', '"#{a}"'
+        it_behaves_like 'mutable objects', '"#@a"'
+        it_behaves_like 'mutable objects', '"#@@a"'
+        it_behaves_like 'mutable objects', '"#$a"'
       end
 
       context 'when the frozen string literal comment is false' do
         let(:prefix) { '# frozen_string_literal: false' }
 
         it_behaves_like 'mutable objects', '"#{a}"'
+        it_behaves_like 'mutable objects', '"#@a"'
+        it_behaves_like 'mutable objects', '"#@@a"'
+        it_behaves_like 'mutable objects', '"#$a"'
       end
     end
 
-    context 'Ruby 2.7 or lower', :ruby27 do
+    context 'Ruby 2.7 or lower', :ruby27, unsupported_on: :prism do
       context 'when the frozen string literal comment is missing' do
         it_behaves_like 'mutable objects', '"#{a}"'
+        it_behaves_like 'mutable objects', '"#@a"'
+        it_behaves_like 'mutable objects', '"#@@a"'
+        it_behaves_like 'mutable objects', '"#$a"'
       end
 
       context 'when the frozen string literal comment is true' do
         let(:prefix) { '# frozen_string_literal: true' }
 
         it_behaves_like 'immutable objects', '"#{a}"'
+        it_behaves_like 'immutable objects', '"#@a"'
+        it_behaves_like 'immutable objects', '"#@@a"'
+        it_behaves_like 'immutable objects', '"#$a"'
       end
 
       context 'when the frozen string literal comment is false' do
         let(:prefix) { '# frozen_string_literal: false' }
 
         it_behaves_like 'mutable objects', '"#{a}"'
+        it_behaves_like 'mutable objects', '"#@a"'
+        it_behaves_like 'mutable objects', '"#@@a"'
+        it_behaves_like 'mutable objects', '"#$a"'
       end
     end
 
@@ -122,7 +196,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantFreeze, :config do
         it_behaves_like 'immutable objects', '(1...5)'
       end
 
-      context 'Ruby 2.7 or lower', :ruby27 do
+      context 'Ruby 2.7 or lower', :ruby27, unsupported_on: :prism do
         it_behaves_like 'mutable objects', '/./'
         it_behaves_like 'mutable objects', '(1..5)'
         it_behaves_like 'mutable objects', '(1...5)'

@@ -16,7 +16,6 @@ module RuboCop
       #   # good
       #   5.times { }
       #
-      # @example
       #   # bad
       #   (0...10).each {}
       #
@@ -32,30 +31,29 @@ module RuboCop
 
           send_node = node.send_node
 
-          range = send_node.receiver.source_range.join(send_node.loc.selector)
-
-          add_offense(range) do |corrector|
+          add_offense(send_node) do |corrector|
             range_type, min, max = each_range(node)
 
             max += 1 if range_type == :irange
 
-            corrector.replace(node.send_node, "#{max - min}.times")
+            corrector.replace(send_node, "#{max - min}.times")
           end
         end
 
         private
 
         def offending?(node)
+          return false unless node.arguments.empty?
+
           each_range_with_zero_origin?(node) || each_range_without_block_argument?(node)
         end
 
         # @!method each_range(node)
         def_node_matcher :each_range, <<~PATTERN
           (block
-            (send
+            (call
               (begin
-                (${irange erange}
-                  (int $_) (int $_)))
+                ($range (int $_) (int $_)))
               :each)
             (args ...)
             ...)
@@ -64,10 +62,9 @@ module RuboCop
         # @!method each_range_with_zero_origin?(node)
         def_node_matcher :each_range_with_zero_origin?, <<~PATTERN
           (block
-            (send
+            (call
               (begin
-                ({irange erange}
-                  (int 0) (int _)))
+                (range (int 0) (int _)))
               :each)
             (args ...)
             ...)
@@ -76,10 +73,9 @@ module RuboCop
         # @!method each_range_without_block_argument?(node)
         def_node_matcher :each_range_without_block_argument?, <<~PATTERN
           (block
-            (send
+            (call
               (begin
-                ({irange erange}
-                  (int _) (int _)))
+                (range (int _) (int _)))
               :each)
             (args)
             ...)

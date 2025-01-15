@@ -66,10 +66,10 @@ module RuboCop
         end
       end
 
-      def line_breaks(node, source, previous_line_num, base_line_num, node_indx)
+      def line_breaks(node, source, previous_line_num, base_line_num, node_index)
         source_in_lines = source.split("\n")
         if first_line?(node, previous_line_num)
-          node_indx.zero? && node.first_line == base_line_num ? '' : ' '
+          node_index.zero? && node.first_line == base_line_num ? '' : ' '
         else
           process_lines(node, previous_line_num, base_line_num, source_in_lines)
         end
@@ -94,6 +94,16 @@ module RuboCop
       end
 
       def substitute_escaped_delimiters(content, delimiters)
+        if delimiters.first != delimiters.last
+          # With different delimiters (eg. `[]`, `()`), if there are the same
+          # number of each, escaping is not necessary
+          delimiter_counts = delimiters.each_with_object({}) do |delimiter, counts|
+            counts[delimiter] = content.count(delimiter)
+          end
+
+          return content if delimiter_counts[delimiters.first] == delimiter_counts[delimiters.last]
+        end
+
         delimiters.each { |delim| content.gsub!(delim, "\\#{delim}") }
       end
 

@@ -3,7 +3,7 @@
 module RuboCop
   module Cop
     module Style
-      # Looks for places where an subset of an Enumerable (array,
+      # Looks for places where a subset of an Enumerable (array,
       # range, set, etc.; see note below) is calculated based on a `Regexp`
       # match, and suggests `grep` or `grep_v` instead.
       #
@@ -27,7 +27,7 @@ module RuboCop
       #   so the correction may not be actually equivalent.
       #
       # @example
-      #   # bad (select or find_all)
+      #   # bad (select, filter, or find_all)
       #   array.select { |x| x.match? /regexp/ }
       #   array.select { |x| /regexp/.match?(x) }
       #   array.select { |x| x =~ /regexp/ }
@@ -47,16 +47,18 @@ module RuboCop
         include RangeHelp
 
         MSG = 'Prefer `%<replacement>s` to `%<original_method>s` with a regexp match.'
-        RESTRICT_ON_SEND = %i[select find_all reject].freeze
-        REPLACEMENTS = { select: 'grep', find_all: 'grep', reject: 'grep_v' }.freeze
-        OPPOSITE_REPLACEMENTS = { select: 'grep_v', find_all: 'grep_v', reject: 'grep' }.freeze
+        RESTRICT_ON_SEND = %i[select filter find_all reject].freeze
+        REPLACEMENTS = { select: 'grep', filter: 'grep', find_all: 'grep', reject: 'grep_v' }.freeze
+        OPPOSITE_REPLACEMENTS = {
+          select: 'grep_v', filter: 'grep_v', find_all: 'grep_v', reject: 'grep'
+        }.freeze
         REGEXP_METHODS = %i[match? =~ !~].to_set.freeze
 
         # @!method regexp_match?(node)
         def_node_matcher :regexp_match?, <<~PATTERN
           {
-            (block send (args (arg $_)) ${(send _ %REGEXP_METHODS _) match-with-lvasgn})
-            (numblock send $1 ${(send _ %REGEXP_METHODS _) match-with-lvasgn})
+            (block call (args (arg $_)) ${(send _ %REGEXP_METHODS _) match-with-lvasgn})
+            (numblock call $1 ${(send _ %REGEXP_METHODS _) match-with-lvasgn})
           }
         PATTERN
 
@@ -64,9 +66,9 @@ module RuboCop
         # @!method creates_hash?(node)
         def_node_matcher :creates_hash?, <<~PATTERN
           {
-            (send (const _ :Hash) {:new :[]} ...)
-            (block (send (const _ :Hash) :new ...) ...)
-            (send _ { :to_h :to_hash } ...)
+            (call (const _ :Hash) {:new :[]} ...)
+            (block (call (const _ :Hash) :new ...) ...)
+            (call _ { :to_h :to_hash } ...)
           }
         PATTERN
 
@@ -84,18 +86,24 @@ module RuboCop
           }
         PATTERN
 
+        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def on_send(node)
+          return if target_ruby_version < 2.6 && node.method?(:filter)
           return unless (block_node = node.block_node)
           return if block_node.body&.begin_type?
           return if receiver_allowed?(block_node.receiver)
           return unless (regexp_method_send_node = extract_send_node(block_node))
           return if match_predicate_without_receiver?(regexp_method_send_node)
 
-          opposite = opposite?(regexp_method_send_node)
+          replacement = replacement(regexp_method_send_node, node)
+          return if target_ruby_version <= 2.2 && replacement == 'grep_v'
+
           regexp = find_regexp(regexp_method_send_node, block_node)
 
-          register_offense(node, block_node, regexp, opposite)
+          register_offense(node, block_node, regexp, replacement)
         end
+        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        alias on_csend on_send
 
         private
 
@@ -105,9 +113,15 @@ module RuboCop
           node.hash_type? || creates_hash?(node) || env_const?(node)
         end
 
-        def register_offense(node, block_node, regexp, opposite)
-          method_name = node.method_name.to_sym
-          replacement = opposite ? OPPOSITE_REPLACEMENTS[method_name] : REPLACEMENTS[method_name]
+        def replacement(regexp_method_send_node, node)
+          opposite = opposite?(regexp_method_send_node)
+
+          method_name = node.method_name
+
+          opposite ? OPPOSITE_REPLACEMENTS[method_name] : REPLACEMENTS[method_name]
+        end
+
+        def register_offense(node, block_node, regexp, replacement)
           message = format(MSG, replacement: replacement, original_method: node.method_name)
 
           add_offense(block_node, message: message) do |corrector|
@@ -136,7 +150,7 @@ module RuboCop
           return node.child_nodes.first if node.match_with_lvasgn_type?
 
           if node.receiver.lvar_type? &&
-             (block.numblock_type? || node.receiver.source == block.arguments.first.source)
+             (block.numblock_type? || node.receiver.source == block.first_argument.source)
             node.first_argument
           elsif node.first_argument.lvar_type?
             node.receiver

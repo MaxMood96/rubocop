@@ -10,17 +10,13 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   begin
       #     do_something
       #   else
       #     do_something_else # This will never be run.
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   begin
       #     do_something
       #   rescue
@@ -29,7 +25,11 @@ module RuboCop
       #     do_something_else
       #   end
       class UselessElseWithoutRescue < Base
+        extend TargetRubyVersion
+
         MSG = '`else` without `rescue` is useless.'
+
+        maximum_target_ruby_version 2.5
 
         def on_new_investigation
           processed_source.diagnostics.each do |diagnostic|

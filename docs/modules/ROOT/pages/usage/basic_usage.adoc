@@ -168,6 +168,9 @@ $ rubocop --only Rails/Blank,Layout/HeredocIndentation,Naming/FileName
 | `-D/--[no-]display-cop-names`
 | Displays cop names in offense messages. Default is true.
 
+| `--display-time`
+| Display elapsed time in seconds.
+
 | `--display-only-fail-level-offenses`
 | Only output offense messages at the specified `--fail-level` or above.
 
@@ -196,7 +199,7 @@ $ rubocop --only Rails/Blank,Layout/HeredocIndentation,Naming/FileName
 | Inspect files in order of modification time and stops after first file with offenses.
 
 | `--fail-level`
-| Minimum xref:configuration.adoc#severity[severity] for exit with error code. Full severity name or upper case initial can be given. Normally, autocorrected offenses are ignored. Use `A` or `autocorrect` if you'd like them to trigger failure.
+| Minimum xref:configuration.adoc#severity[severity] for exit with error code. Full severity name or upper case initial can be given. Normally, autocorrected offenses are ignored. Use `A` or `autocorrect` if you'd like any autocorrectable offense to trigger failure, regardless of severity.
 
 | `--force-exclusion`
 | Force excluding files specified in the configuration `Exclude` even if they are explicitly passed as arguments.
@@ -256,7 +259,7 @@ $ rubocop --only Rails/Blank,Layout/HeredocIndentation,Naming/FileName
 | Deprecated alias of `-a/--autocorrect`.
 
 | `--show-cops`
-| Shows available cops and their configuration.
+| Shows available cops and their configuration. You can use `*` as a wildcard.
 
 | `--show-docs-url`
 | Shows urls for documentation pages of supplied cops.
@@ -266,6 +269,9 @@ $ rubocop --only Rails/Blank,Layout/HeredocIndentation,Naming/FileName
 
 | `-s/--stdin`
 | Pipe source from STDIN. This is useful for editor integration. Takes one argument, a path, relative to the root of the project. RuboCop will use this path to determine which cops are enabled (via eg. Include/Exclude), and so that certain cops like Naming/FileName can be checked.
+
+| `--editor-mode`
+| Optimize real-time feedback in editors, adjusting behaviors for editing experience. Editors that run RuboCop directly (e.g., by shelling out) encounter the same issues as with `--lsp`. This option is designed for such editors.
 
 | `-S/--display-style-guide`
 | Display style guide URLs in offense messages.
@@ -298,3 +304,17 @@ autocorrected do not cause RuboCop to fail.)
 default, this is any offense which is not autocorrected.)
 * `2` if RuboCop terminates abnormally due to invalid configuration, invalid CLI
 options, or an internal error.
+
+== Parallel Processing
+
+RuboCop enables the `--parallel` option by default. This option allows for
+parallel processing using the number of available CPUs based on `Etc.nprocessors`.
+If the default number of parallel processes causes excessive consumption of CPU and memory,
+you can adjust the number of parallel processes using the `$PARALLEL_PROCESSOR_COUNT` environment variable.
+Here is how to set the parallel processing to use two CPUs:
+
+```console
+$ PARALLEL_PROCESSOR_COUNT=2 bundle exec rubocop
+```
+
+Alternatively, specifying `--no-parallel` will disable parallel processing.

@@ -43,7 +43,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
     RUBY
   end
 
-  context 'target ruby version <= 2.0', :ruby20 do
+  context 'target ruby version <= 2.0', :ruby20, unsupported_on: :prism do
     it 'does not register an offense when using requiring `thread`' do
       expect_no_offenses(<<~RUBY)
         require 'thread'
@@ -52,7 +52,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
   end
 
   context 'target ruby version >= 2.1', :ruby21 do
-    it 'register an offense and corrects when using requiring `thread` or already redundant features' do
+    it 'registers an offense and corrects when using requiring `thread` or already redundant features' do
       expect_offense(<<~RUBY)
         require 'enumerator'
         ^^^^^^^^^^^^^^^^^^^^ Remove unnecessary `require` statement.
@@ -67,7 +67,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
     end
   end
 
-  context 'target ruby version <= 2.1', :ruby21 do
+  context 'target ruby version <= 2.1', :ruby21, unsupported_on: :prism do
     it 'does not register an offense when using requiring `rational`, `complex`' do
       expect_no_offenses(<<~RUBY)
         require 'rational'
@@ -96,7 +96,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
     end
   end
 
-  context 'target ruby version <= 2.4', :ruby24 do
+  context 'target ruby version <= 2.4', :ruby24, unsupported_on: :prism do
     it 'does not register an offense when using requiring `pp`' do
       expect_no_offenses(<<~RUBY)
         require 'pp'
@@ -107,7 +107,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
   end
 
   context 'target ruby version >= 2.5', :ruby25 do
-    it 'register an offense and corrects when using requiring `pp` or already redundant features' do
+    it 'registers an offense and corrects when using requiring `pp` or already redundant features' do
       expect_offense(<<~RUBY)
         require 'enumerator'
         ^^^^^^^^^^^^^^^^^^^^ Remove unnecessary `require` statement.
@@ -128,7 +128,23 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
     end
 
     context 'when requiring `pp`' do
-      it 'does not register an offense and corrects when using `pretty_inspect`' do
+      it 'does not register an offense when using `PP.pp`' do
+        expect_no_offenses(<<~RUBY)
+          require 'pp'
+
+          PP.pp
+        RUBY
+      end
+
+      it 'does not register an offense when using `::PP.pp`' do
+        expect_no_offenses(<<~RUBY)
+          require 'pp'
+
+          ::PP.pp
+        RUBY
+      end
+
+      it 'does not register an offense when using `pretty_inspect`' do
         expect_no_offenses(<<~RUBY)
           require 'pp'
 
@@ -136,7 +152,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
         RUBY
       end
 
-      it 'does not register an offense and corrects when using `pretty_print`' do
+      it 'does not register an offense when using `pretty_print`' do
         expect_no_offenses(<<~RUBY)
           require 'pp'
 
@@ -144,7 +160,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
         RUBY
       end
 
-      it 'does not register an offense and corrects when using `pretty_print_cycle`' do
+      it 'does not register an offense when using `pretty_print_cycle`' do
         expect_no_offenses(<<~RUBY)
           require 'pp'
 
@@ -152,7 +168,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
         RUBY
       end
 
-      it 'does not register an offense and corrects when using `pretty_print_inspect`' do
+      it 'does not register an offense when using `pretty_print_inspect`' do
         expect_no_offenses(<<~RUBY)
           require 'pp'
 
@@ -160,7 +176,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
         RUBY
       end
 
-      it 'does not register an offense and corrects when using `pretty_print_instance_variables`' do
+      it 'does not register an offense when using `pretty_print_instance_variables`' do
         expect_no_offenses(<<~RUBY)
           require 'pp'
 
@@ -170,7 +186,7 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
     end
   end
 
-  context 'target ruby version <= 2.6', :ruby26 do
+  context 'target ruby version <= 2.6', :ruby26, unsupported_on: :prism do
     it 'does not register an offense when using requiring `ruby2_keywords`' do
       expect_no_offenses(<<~RUBY)
         require 'ruby2_keywords'
@@ -202,8 +218,8 @@ RSpec.describe RuboCop::Cop::Lint::RedundantRequireStatement, :config do
     end
   end
 
-  context 'target ruby version < 3.1', :ruby30 do
-    it 'does not register an offense and corrects when using requiring `fiber`' do
+  context 'target ruby version < 3.1', :ruby30, unsupported_on: :prism do
+    it 'does not register an offense when using requiring `fiber`' do
       expect_no_offenses(<<~RUBY)
         require 'fiber'
       RUBY

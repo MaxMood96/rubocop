@@ -59,11 +59,13 @@ module RuboCop
       #
       class NonDeterministicRequireOrder < Base
         extend AutoCorrector
+        extend TargetRubyVersion
 
         MSG = 'Sort files before requiring them.'
 
+        maximum_target_ruby_version 2.7
+
         def on_block(node)
-          return if target_ruby_version >= 3.0
           return unless node.body
           return unless unsorted_dir_loop?(node.send_node)
 
@@ -75,7 +77,6 @@ module RuboCop
         end
 
         def on_numblock(node)
-          return if target_ruby_version >= 3.0
           return unless node.body
           return unless unsorted_dir_loop?(node.send_node)
 
@@ -87,14 +88,13 @@ module RuboCop
         end
 
         def on_block_pass(node)
-          return if target_ruby_version >= 3.0
           return unless method_require?(node)
           return unless unsorted_dir_pass?(node.parent)
 
           parent_node = node.parent
 
           add_offense(parent_node) do |corrector|
-            if parent_node.arguments.last&.block_pass_type?
+            if parent_node.last_argument&.block_pass_type?
               correct_block_pass(corrector, parent_node)
             else
               correct_block(corrector, parent_node)
@@ -116,7 +116,7 @@ module RuboCop
 
         def correct_block_pass(corrector, node)
           if unsorted_dir_glob_pass?(node)
-            block_arg = node.arguments.last
+            block_arg = node.last_argument
 
             corrector.remove(last_arg_range(node))
             corrector.insert_after(node, ".sort.each(#{block_arg.source})")
@@ -130,9 +130,7 @@ module RuboCop
         # @return [Parser::Source::Range]
         #
         def last_arg_range(node)
-          node.arguments.last.source_range.with(
-            begin_pos: node.arguments[-2].source_range.end_pos
-          )
+          node.last_argument.source_range.join(node.arguments[-2].source_range.end)
         end
 
         def unsorted_dir_loop?(node)

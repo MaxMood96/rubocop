@@ -118,8 +118,8 @@ module RuboCop
       #
       # @example EnforcedStyle: special_for_inner_method_call
       #   # The first argument should normally be indented one step more than
-      #   # the preceding line, but if it's a argument for a method call that
-      #   # is itself a argument in a method call, then the inner argument
+      #   # the preceding line, but if it's an argument for a method call that
+      #   # is itself an argument in a method call, then the inner argument
       #   # should be indented relative to the inner method.
       #
       #   # good
@@ -153,9 +153,10 @@ module RuboCop
         MSG = 'Indent the first argument one step more than %<base>s.'
 
         def on_send(node)
+          return unless should_check?(node)
+          return if same_line?(node, node.first_argument)
           return if style != :consistent && enforce_first_argument_with_fixed_indentation? &&
                     !enable_layout_first_method_argument_line_break?
-          return if !node.arguments? || bare_operator?(node) || node.setter_method?
 
           indent = base_indentation(node) + configured_indentation_width
 
@@ -165,6 +166,10 @@ module RuboCop
         alias on_super on_send
 
         private
+
+        def should_check?(node)
+          node.arguments? && !bare_operator?(node) && !node.setter_method?
+        end
 
         def autocorrect(corrector, node)
           AlignmentCorrector.correct(corrector, processed_source, node, column_delta)
@@ -255,7 +260,7 @@ module RuboCop
           @comment_lines ||=
             processed_source
             .comments
-            .select { |c| begins_its_line?(c.loc.expression) }
+            .select { |c| begins_its_line?(c.source_range) }
             .map { |c| c.loc.line }
         end
 
@@ -264,17 +269,12 @@ module RuboCop
         end
 
         def enforce_first_argument_with_fixed_indentation?
-          return false unless argument_alignment_config['Enabled']
-
+          argument_alignment_config = config.for_enabled_cop('Layout/ArgumentAlignment')
           argument_alignment_config['EnforcedStyle'] == 'with_fixed_indentation'
         end
 
         def enable_layout_first_method_argument_line_break?
-          config.for_cop('Layout/FirstMethodArgumentLineBreak')['Enabled']
-        end
-
-        def argument_alignment_config
-          config.for_cop('Layout/ArgumentAlignment')
+          config.cop_enabled?('Layout/FirstMethodArgumentLineBreak')
         end
       end
     end

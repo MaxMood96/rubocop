@@ -35,7 +35,7 @@ module RuboCop
 
         # @!method sample_candidate?(node)
         def_node_matcher :sample_candidate?, <<~PATTERN
-          (send $(send _ :shuffle $...) ${:#{RESTRICT_ON_SEND.join(' :')}} $...)
+          (call $(call _ :shuffle $...) ${:#{RESTRICT_ON_SEND.join(' :')}} $...)
         PATTERN
 
         def on_send(node)
@@ -52,6 +52,7 @@ module RuboCop
             end
           end
         end
+        alias on_csend on_send
 
         private
 
@@ -109,9 +110,7 @@ module RuboCop
         # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
         def source_range(shuffle_node, node)
-          Parser::Source::Range.new(shuffle_node.source_range.source_buffer,
-                                    shuffle_node.loc.selector.begin_pos,
-                                    node.source_range.end_pos)
+          shuffle_node.loc.selector.join(node.source_range.end)
         end
 
         def message(shuffle_arg, method, method_args, range)

@@ -1,10 +1,6 @@
 # frozen_string_literal: true
 
 RSpec.describe RuboCop::Cop::InternalAffairs::CopDescription, :config do
-  before do
-    allow_any_instance_of(described_class).to receive(:relevant_file?).and_return(true) # rubocop:disable RSpec/AnyInstance
-  end
-
   context 'The description starts with `This cop ...`' do
     it 'registers an offense and corrects if using just a verb' do
       expect_offense(<<~RUBY)
@@ -104,6 +100,38 @@ RSpec.describe RuboCop::Cop::InternalAffairs::CopDescription, :config do
         end
       RUBY
     end
+  end
+
+  it 'registers an offense if the description starts with an empty comment line' do
+    expect_offense(<<~RUBY)
+      module RuboCop
+        module Cop
+          module Lint
+            #
+      ^^^^^^^ Description should not start with an empty comment line.
+            # Checks some problem
+            #
+            # ...
+            class Foo < Base
+            end
+          end
+        end
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      module RuboCop
+        module Cop
+          module Lint
+            # Checks some problem
+            #
+            # ...
+            class Foo < Base
+            end
+          end
+        end
+      end
+    RUBY
   end
 
   context 'There is no description comment' do

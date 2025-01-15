@@ -3,9 +3,7 @@
 module RuboCop
   module Cop
     module Style
-      # Checks for uses of rescue in its modifier form.
-      #
-      # The cop to check `rescue` in its modifier form is added for following
+      # Checks for uses of `rescue` in its modifier form is added for following
       # reasons:
       #
       # * The syntax of modifier form `rescue` can be misleading because it
@@ -70,17 +68,16 @@ module RuboCop
         end
 
         def correct_rescue_block(corrector, node, parenthesized)
-          operation, rescue_modifier, = *node
-          *_, rescue_args = *rescue_modifier
+          operation = node.body
 
           node_indentation, node_offset = indentation_and_offset(node, parenthesized)
 
           corrector.remove(range_between(operation.source_range.end_pos, node.source_range.end_pos))
           corrector.insert_before(operation, "begin\n#{node_indentation}")
-          corrector.insert_after(operation, <<~RESCUE_CLAUSE.chop)
+          corrector.insert_after(heredoc_end(operation) || operation, <<~RESCUE_CLAUSE.chop)
 
             #{node_offset}rescue
-            #{node_indentation}#{rescue_args.source}
+            #{node_indentation}#{node.resbody_branches.first.body.source}
             #{node_offset}end
           RESCUE_CLAUSE
         end
@@ -93,6 +90,18 @@ module RuboCop
             node_offset = node_offset[0...-1]
           end
           [node_indentation, node_offset]
+        end
+
+        def heredoc_end(node)
+          return unless node.call_type?
+
+          heredoc = node.arguments.reverse.find do |argument|
+            argument.respond_to?(:heredoc?) && argument.heredoc?
+          end
+
+          return unless heredoc
+
+          heredoc.loc.heredoc_end
         end
       end
     end

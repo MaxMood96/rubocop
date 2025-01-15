@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 RSpec.describe RuboCop::Cop::Naming::VariableNumber, :config do
-  let(:cop_config) { { 'CheckMethodNames' => true, 'CheckSymbols' => true } }
-
   shared_examples 'offense' do |style, variable, style_to_allow_offenses|
     it "registers an offense for #{variable} in #{style}" do
       expect_offense(<<~RUBY, variable: variable)
@@ -28,7 +26,8 @@ RSpec.describe RuboCop::Cop::Naming::VariableNumber, :config do
   end
 
   shared_examples 'accepts' do |style, variable|
-    it "accepts #{variable} in #{style}" do
+    # `_1 = 1` is a deprecated valid syntax in Ruby 2.7, but an invalid syntax in Ruby 3.0+.
+    it "accepts #{variable} in #{style}", :ruby27, unsupported_on: :prism do
       expect_no_offenses("#{variable} = 1")
     end
   end
@@ -303,7 +302,7 @@ RSpec.describe RuboCop::Cop::Naming::VariableNumber, :config do
       RUBY
     end
 
-    it 'does not register an offense for a instance variable name that is allowed' do
+    it 'does not register an offense for an instance variable name that is allowed' do
       expect_no_offenses(<<~RUBY)
         @capture3 = :foo
       RUBY
@@ -361,14 +360,14 @@ RSpec.describe RuboCop::Cop::Naming::VariableNumber, :config do
       RUBY
     end
 
-    it 'registers an offense for a instance variable name that does not match an allowed pattern' do
+    it 'registers an offense for an instance variable name that does not match an allowed pattern' do
       expect_offense(<<~RUBY)
         @foo_a1 = :foo
         ^^^^^^^ Use snake_case for variable numbers.
       RUBY
     end
 
-    it 'does not register an offense for a instance variable name that matches an allowed pattern' do
+    it 'does not register an offense for an instance variable name that matches an allowed pattern' do
       expect_no_offenses(<<~RUBY)
         @foo_v1 = :foo
         @foo_allow_me_a1 = :allowed

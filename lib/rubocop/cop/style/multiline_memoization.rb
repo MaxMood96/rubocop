@@ -39,11 +39,11 @@ module RuboCop
         BRACES_MSG = 'Wrap multiline memoization blocks in `(` and `)`.'
 
         def on_or_asgn(node)
-          _lhs, rhs = *node
+          rhs = node.expression
 
           return unless bad_rhs?(rhs)
 
-          add_offense(node.source_range) do |corrector|
+          add_offense(node) do |corrector|
             if style == :keyword
               keyword_autocorrect(rhs, corrector)
             else

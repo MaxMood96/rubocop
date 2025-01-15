@@ -125,15 +125,14 @@ module RuboCop
         MSG = 'Freeze mutable objects assigned to constants.'
 
         def on_casgn(node)
-          _scope, _const_name, value = *node
-          if value.nil? # This is only the case for `CONST += ...` or similarg66
+          if node.expression.nil? # This is only the case for `CONST += ...` or similarg66
             parent = node.parent
             return unless parent.or_asgn_type? # We only care about `CONST ||= ...`
 
-            value = parent.children.last
+            on_assignment(parent.children.last)
+          else
+            on_assignment(node.expression)
           end
-
-          on_assignment(value)
         end
 
         private
@@ -239,7 +238,7 @@ module RuboCop
 
         # @!method range_enclosed_in_parentheses?(node)
         def_node_matcher :range_enclosed_in_parentheses?, <<~PATTERN
-          (begin ({irange erange} _ _))
+          (begin (range _ _))
         PATTERN
       end
     end

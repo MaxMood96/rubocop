@@ -19,6 +19,7 @@ module RuboCop
       #   'underscored_string'.to_sym
       #   :'underscored_symbol'
       #   'hyphenated-string'.to_sym
+      #   "string_#{interpolation}".to_sym
       #
       #   # good
       #   :string
@@ -26,6 +27,7 @@ module RuboCop
       #   :underscored_string
       #   :underscored_symbol
       #   :'hyphenated-string'
+      #   :"string_#{interpolation}"
       #
       # @example EnforcedStyle: strict (default)
       #
@@ -75,9 +77,12 @@ module RuboCop
 
         def on_send(node)
           return unless node.receiver
-          return unless node.receiver.str_type? || node.receiver.sym_type?
 
-          register_offense(node, correction: node.receiver.value.to_sym.inspect)
+          if node.receiver.str_type? || node.receiver.sym_type?
+            register_offense(node, correction: node.receiver.value.to_sym.inspect)
+          elsif node.receiver.dstr_type?
+            register_offense(node, correction: ":\"#{node.receiver.value.to_sym}\"")
+          end
         end
 
         def on_sym(node)
@@ -124,7 +129,7 @@ module RuboCop
           source == value ||
             # `Symbol#inspect` uses double quotes, but allow single-quoted
             # symbols to work as well.
-            source.tr("'", '"') == value
+            source.gsub('"', '\"').tr("'", '"') == value
         end
 
         def requires_quotes?(sym_node)
@@ -136,7 +141,7 @@ module RuboCop
         end
 
         def in_percent_literal_array?(node)
-          node.parent&.array_type? && node.parent&.percent_literal?
+          node.parent&.array_type? && node.parent.percent_literal?
         end
 
         def correct_hash_key(node)

@@ -75,6 +75,43 @@ RSpec.describe RuboCop::Cop::Lint::EmptyConditionalBody, :config do
     RUBY
   end
 
+  it 'does not register an offense for missing 2nd `if` body with a comment' do
+    expect_no_offenses(<<~RUBY)
+      if condition1
+        do_something1
+      end
+      if condition2
+        # noop
+      end
+    RUBY
+  end
+
+  it 'does not register an offense for missing 2nd `elsif` body with a comment' do
+    expect_no_offenses(<<~RUBY)
+      if condition1
+        do_something1
+      elsif condition2
+        do_something2
+      elsif condition3
+        # noop
+      end
+    RUBY
+  end
+
+  it 'does not register an offense for missing 3rd `elsif` body with a comment' do
+    expect_no_offenses(<<~RUBY)
+      if condition1
+        do_something1
+      elsif condition2
+        do_something2
+      elsif condition3
+        do_something3
+      elsif condition4
+        # noop
+      end
+    RUBY
+  end
+
   it 'registers an offense for missing `elsif` body' do
     expect_offense(<<~RUBY)
       if condition
@@ -171,6 +208,38 @@ RSpec.describe RuboCop::Cop::Lint::EmptyConditionalBody, :config do
     RUBY
   end
 
+  it 'registers an offense for missing `if` body with conditional `else` body' do
+    expect_offense(<<~RUBY)
+      if condition
+      ^^^^^^^^^^^^ Avoid `if` branches without a body.
+      else
+        do_something if x
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      unless condition
+        do_something if x
+      end
+    RUBY
+  end
+
+  it 'registers an offense for missing `unless` body with conditional `else` body' do
+    expect_offense(<<~RUBY)
+      unless condition
+      ^^^^^^^^^^^^^^^^ Avoid `unless` branches without a body.
+      else
+        do_something if x
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      if condition
+        do_something if x
+      end
+    RUBY
+  end
+
   it 'registers an offense for missing `unless` and `else` body' do
     expect_offense(<<~RUBY)
       unless condition
@@ -199,6 +268,36 @@ RSpec.describe RuboCop::Cop::Lint::EmptyConditionalBody, :config do
       elsif another_condition
         do_something_else
       end
+    RUBY
+  end
+
+  it 'registers an offense for missing `elsif` body with `end` on the same line' do
+    expect_offense(<<~RUBY)
+      if cond_a
+        do_a
+      elsif cond_b;end
+      ^^^^^^^^^^^^^ Avoid `elsif` branches without a body.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      if cond_a
+        do_a
+      end
+    RUBY
+  end
+
+  it 'registers an offense for missing `elsif` and `else` bodies with `end` on the same line' do
+    expect_offense(<<~RUBY)
+      if cond_a
+        do_a
+      elsif cond_b;else;end
+      ^^^^^^^^^^^^^ Avoid `elsif` branches without a body.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      if cond_a
+        do_a
+      else;end
     RUBY
   end
 
@@ -273,6 +372,26 @@ RSpec.describe RuboCop::Cop::Lint::EmptyConditionalBody, :config do
     expect_correction('')
   end
 
+  it 'registers an offense when missing `if` body and using method call for return value' do
+    expect_offense(<<~RUBY)
+      if condition
+      ^^^^^^^^^^^^ Avoid `if` branches without a body.
+      end.do_something
+    RUBY
+
+    expect_no_corrections
+  end
+
+  it 'registers an offense when missing `if` body and using safe navigation method call for return value' do
+    expect_offense(<<~RUBY)
+      if condition
+      ^^^^^^^^^^^^ Avoid `if` branches without a body.
+      end&.do_something
+    RUBY
+
+    expect_no_corrections
+  end
+
   it 'does not register an offense for missing `unless` body with a comment' do
     expect_no_offenses(<<~RUBY)
       unless condition
@@ -295,6 +414,19 @@ RSpec.describe RuboCop::Cop::Lint::EmptyConditionalBody, :config do
         5
       end
     RUBY
+  end
+
+  context '>= Ruby 3.1', :ruby31 do
+    it 'registers an offense for multi-line value omission in `unless`' do
+      expect_offense(<<~RUBY)
+        var =
+          # This is the value of `other:`, like so: `other: condition || other_condition`
+          unless object.action value:, other:
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Avoid `unless` branches without a body.
+            condition || other_condition
+          end
+      RUBY
+    end
   end
 
   context 'when AllowComments is false' do

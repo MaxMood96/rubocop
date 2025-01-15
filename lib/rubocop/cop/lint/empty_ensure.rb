@@ -3,40 +3,30 @@
 module RuboCop
   module Cop
     module Lint
-      # Checks for empty `ensure` blocks
+      # Checks for empty `ensure` blocks.
       #
       # @example
       #
       #   # bad
-      #
       #   def some_method
       #     do_something
       #   ensure
       #   end
       #
-      # @example
-      #
       #   # bad
-      #
       #   begin
       #     do_something
       #   ensure
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   def some_method
       #     do_something
       #   ensure
       #     do_something_else
       #   end
       #
-      # @example
-      #
       #   # good
-      #
       #   begin
       #     do_something
       #   ensure
@@ -48,7 +38,7 @@ module RuboCop
         MSG = 'Empty `ensure` block detected.'
 
         def on_ensure(node)
-          return if node.body
+          return if node.branch
 
           add_offense(node.loc.keyword) { |corrector| corrector.remove(node.loc.keyword) }
         end

@@ -4,7 +4,7 @@ module RuboCop
   module Cop
     module Lint
       # Checks for uses of `Integer#times` that will never yield
-      # (when the integer <= 0) or that will only ever yield once
+      # (when the integer ``<= 0``) or that will only ever yield once
       # (`1.times`).
       #
       # @safety
@@ -64,7 +64,7 @@ module RuboCop
             remove_node(corrector, node)
           elsif !proc_name.empty?
             autocorrect_block_pass(corrector, node, proc_name)
-          else
+          elsif node.block_type?
             autocorrect_block(corrector, node)
           end
         end
@@ -74,7 +74,7 @@ module RuboCop
         end
 
         def remove_node(corrector, node)
-          corrector.remove(range_by_whole_lines(node.loc.expression, include_final_newline: true))
+          corrector.remove(range_by_whole_lines(node.source_range, include_final_newline: true))
         end
 
         def autocorrect_block_pass(corrector, node, proc_name)

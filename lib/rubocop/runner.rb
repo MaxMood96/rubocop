@@ -20,7 +20,7 @@ module RuboCop
         message = 'Infinite loop detected'
         message += " in #{path}" if path
         message += " and caused by #{root_cause}" if root_cause
-        super message
+        super(message)
       end
     end
 
@@ -135,7 +135,7 @@ module RuboCop
         offenses = process_file(file)
         yield file
 
-        if offenses.any? { |o| considered_failure?(o) }
+        if offenses.any? { |o| considered_failure?(o) && offense_displayed?(o) }
           break false if @options[:fail_fast]
 
           next false
@@ -153,8 +153,11 @@ module RuboCop
       file_started(file)
       offenses = file_offenses(file)
     rescue InfiniteCorrectionLoop => e
+      raise e if @options[:raise_cop_error]
+
+      errors << e
+      warn Rainbow(e.message).red
       offenses = e.offenses.compact.sort.freeze
-      raise
     ensure
       file_finished(file, offenses || [])
     end
@@ -358,6 +361,13 @@ module RuboCop
       self.class.ruby_extractors.find do |ruby_extractor|
         result = ruby_extractor.call(processed_source)
         break result if result
+      rescue StandardError
+        location = if ruby_extractor.is_a?(Proc)
+                     ruby_extractor.source_location
+                   else
+                     ruby_extractor.method(:call).source_location
+                   end
+        raise Error, "Ruby extractor #{location[0]} failed to process #{processed_source.path}."
       end
     end
 
@@ -421,24 +431,28 @@ module RuboCop
     end
 
     def considered_failure?(offense)
-      # For :autocorrect level, any offense - corrected or not - is a failure.
       return false if offense.disabled?
 
-      return true if @options[:fail_level] == :autocorrect
+      # For :autocorrect level, any correctable offense is a failure, regardless of severity
+      return true if @options[:fail_level] == :autocorrect && offense.correctable?
 
       !offense.corrected? && offense.severity >= minimum_severity_to_fail
     end
 
-    def offenses_to_report(offenses)
+    def offense_displayed?(offense)
       if @options[:display_only_fail_level_offenses]
-        offenses.select { |o| considered_failure?(o) }
+        considered_failure?(offense)
       elsif @options[:display_only_safe_correctable]
-        offenses.select { |o| supports_safe_autocorrect?(o) }
+        supports_safe_autocorrect?(offense)
       elsif @options[:display_only_correctable]
-        offenses.select(&:correctable?)
+        offense.correctable?
       else
-        offenses
+        true
       end
+    end
+
+    def offenses_to_report(offenses)
+      offenses.select { |o| offense_displayed?(o) }
     end
 
     def supports_safe_autocorrect?(offense)
@@ -461,19 +475,27 @@ module RuboCop
       @minimum_severity_to_fail ||= begin
         # Unless given explicitly as `fail_level`, `:info` severity offenses do not fail
         name = @options[:fail_level] || :refactor
-        RuboCop::Cop::Severity.new(name)
+
+        # autocorrect is a fake level - use the default
+        RuboCop::Cop::Severity.new(name == :autocorrect ? :refactor : name)
       end
     end
 
+    # rubocop:disable Metrics/MethodLength
     def get_processed_source(file)
       config = @config_store.for_file(file)
       ruby_version = config.target_ruby_version
+      parser_engine = config.parser_engine
 
       processed_source = if @options[:stdin]
-                           ProcessedSource.new(@options[:stdin], ruby_version, file)
+                           ProcessedSource.new(
+                             @options[:stdin], ruby_version, file, parser_engine: parser_engine
+                           )
                          else
                            begin
-                             ProcessedSource.from_file(file, ruby_version)
+                             ProcessedSource.from_file(
+                               file, ruby_version, parser_engine: parser_engine
+                             )
                            rescue Errno::ENOENT
                              raise RuboCop::Error, "No such file or directory: #{file}"
                            end
@@ -482,6 +504,7 @@ module RuboCop
       processed_source.registry = mobilized_cop_classes(config)
       processed_source
     end
+    # rubocop:enable Metrics/MethodLength
 
     # A Cop::Team instance is stateful and may change when inspecting.
     # The "standby" team for a given config is an initialized but

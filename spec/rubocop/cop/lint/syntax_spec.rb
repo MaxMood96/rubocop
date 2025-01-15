@@ -4,6 +4,10 @@ RSpec.describe RuboCop::Cop::Lint::Syntax, :config do
   describe '.offenses_from_processed_source' do
     let(:commissioner) { RuboCop::Cop::Commissioner.new([cop]) }
     let(:offenses) { commissioner.investigate(processed_source).offenses }
+    let(:ruby_version) { 3.3 } # The minimum version Prism can parse is 3.3.
+    let(:syntax_error_message) do
+      parser_engine == :parser_whitequark ? 'unexpected token $end' : 'expected a matching `)`'
+    end
 
     context 'with a diagnostic error' do
       let(:source) { '(' }
@@ -11,12 +15,12 @@ RSpec.describe RuboCop::Cop::Lint::Syntax, :config do
       it 'returns an offense' do
         expect(offenses.size).to eq(1)
         message = <<~MESSAGE.chomp
-          unexpected token $end
-          (Using Ruby 2.6 parser; configure using `TargetRubyVersion` parameter, under `AllCops`)
+          #{syntax_error_message}
+          (Using Ruby 3.3 parser; configure using `TargetRubyVersion` parameter, under `AllCops`)
         MESSAGE
         offense = offenses.first
         expect(offense.message).to eq(message)
-        expect(offense.severity).to eq(:error)
+        expect(offense.severity).to eq(:fatal)
       end
 
       context 'with --display-cop-names option' do
@@ -25,12 +29,12 @@ RSpec.describe RuboCop::Cop::Lint::Syntax, :config do
         it 'returns an offense with cop name' do
           expect(offenses.size).to eq(1)
           message = <<~MESSAGE.chomp
-            Lint/Syntax: unexpected token $end
-            (Using Ruby 2.6 parser; configure using `TargetRubyVersion` parameter, under `AllCops`)
+            Lint/Syntax: #{syntax_error_message}
+            (Using Ruby 3.3 parser; configure using `TargetRubyVersion` parameter, under `AllCops`)
           MESSAGE
           offense = offenses.first
           expect(offense.message).to eq(message)
-          expect(offense.severity).to eq(:error)
+          expect(offense.severity).to eq(:fatal)
         end
       end
 
@@ -42,18 +46,45 @@ RSpec.describe RuboCop::Cop::Lint::Syntax, :config do
         it 'returns an offense' do
           expect(offenses.size).to eq(1)
           message = <<~MESSAGE.chomp
-            unexpected token $end
-            (Using Ruby 2.6 parser; configure using `TargetRubyVersion` parameter, under `AllCops`)
+            #{syntax_error_message}
+            (Using Ruby 3.3 parser; configure using `TargetRubyVersion` parameter, under `AllCops`)
           MESSAGE
           offense = offenses.first
           expect(offense.message).to eq(message)
-          expect(offense.severity).to eq(:error)
+          expect(offense.severity).to eq(:fatal)
+        end
+      end
+
+      context 'with `--lsp` option', :lsp do
+        it 'does not include a configuration information in the offense message' do
+          expect(offenses.first.message).to eq(syntax_error_message)
         end
       end
     end
 
+    context 'with a diagnostic warning and error' do
+      let(:source) { <<~RUBY }
+        # warning: ambiguous `*` has been interpreted as an argument prefix
+        foo *some_array
+        (
+      RUBY
+
+      it 'shows only syntax errors' do
+        expect(processed_source.diagnostics.map(&:level)).to contain_exactly(:warning, :error)
+
+        expect(offenses.size).to eq(1)
+        message = <<~MESSAGE.chomp
+          #{syntax_error_message}
+          (Using Ruby 3.3 parser; configure using `TargetRubyVersion` parameter, under `AllCops`)
+        MESSAGE
+        offense = offenses.first
+        expect(offense.message).to eq(message)
+        expect(offense.severity).to eq(:fatal)
+      end
+    end
+
     context 'with a parser error' do
-      let(:source) { <<-RUBY }
+      let(:source) { <<~RUBY }
         # \xf9
       RUBY
 

@@ -10,7 +10,7 @@ module RuboCop
       # declarations.
       #
       # The documentation requirement is annulled if the class or module has
-      # a "#:nodoc:" comment next to it. Likewise, "#:nodoc: all" does the
+      # a `#:nodoc:` comment next to it. Likewise, `#:nodoc: all` does the
       # same for all its children.
       #
       # @example
@@ -29,36 +29,36 @@ module RuboCop
       #   end
       #
       #   # allowed
-      #     # Class without body
+      #   # Class without body
+      #   class Person
+      #   end
+      #
+      #   # Namespace - A namespace can be a class or a module
+      #   # Containing a class
+      #   module Namespace
+      #     # Description/Explanation of Person class
       #     class Person
+      #       # ...
+      #     end
+      #   end
+      #
+      #   # Containing constant visibility declaration
+      #   module Namespace
+      #     class Private
       #     end
       #
-      #     # Namespace - A namespace can be a class or a module
-      #     # Containing a class
-      #     module Namespace
-      #       # Description/Explanation of Person class
-      #       class Person
-      #         # ...
-      #       end
-      #     end
+      #     private_constant :Private
+      #   end
       #
-      #     # Containing constant visibility declaration
-      #     module Namespace
-      #       class Private
-      #       end
+      #   # Containing constant definition
+      #   module Namespace
+      #     Public = Class.new
+      #   end
       #
-      #       private_constant :Private
-      #     end
-      #
-      #     # Containing constant definition
-      #     module Namespace
-      #       Public = Class.new
-      #     end
-      #
-      #     # Macro calls
-      #     module Namespace
-      #       extend Foo
-      #     end
+      #   # Macro calls
+      #   module Namespace
+      #     extend Foo
+      #   end
       #
       # @example AllowedConstants: ['ClassMethods']
       #
@@ -67,7 +67,7 @@ module RuboCop
       #      module ClassMethods
       #        # ...
       #      end
-      #     end
+      #    end
       #
       class Documentation < Base
         include DocumentationComment
@@ -110,7 +110,7 @@ module RuboCop
           return if nodoc_self_or_outer_module?(node)
           return if include_statement_only?(body)
 
-          range = range_between(node.loc.expression.begin_pos, node.loc.name.end_pos)
+          range = range_between(node.source_range.begin_pos, node.loc.name.end_pos)
           message = format(MSG, type: node.type, identifier: identifier(node))
           add_offense(range, message: message)
         end
@@ -178,13 +178,19 @@ module RuboCop
         def identifier(node)
           # Get the fully qualified identifier for a class/module
           nodes = [node, *node.each_ancestor(:class, :module)]
-          nodes.reverse_each.flat_map { |n| qualify_const(n.identifier) }.join('::')
+          identifier = nodes.reverse_each.flat_map { |n| qualify_const(n.identifier) }.join('::')
+
+          identifier.sub('::::', '::')
         end
 
         def qualify_const(node)
-          return if node.nil? || node.cbase_type? || node.self_type? || node.send_type?
+          return if node.nil?
 
-          [qualify_const(node.namespace), node.short_name].compact
+          if node.cbase_type? || node.self_type? || node.call_type? || node.variable?
+            node.source
+          else
+            [qualify_const(node.namespace), node.short_name].compact
+          end
         end
       end
     end

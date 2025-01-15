@@ -14,13 +14,9 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   foo = 'something with #{interpolation} inside'
       #
-      # @example
-      #
       #   # good
-      #
       #   foo = "something with #{interpolation} inside"
       class InterpolationCheck < Base
         extend AutoCorrector
@@ -28,14 +24,17 @@ module RuboCop
         MSG = 'Interpolation in single quoted string detected. ' \
               'Use double quoted strings if you need interpolation.'
 
+        # rubocop:disable Metrics/CyclomaticComplexity
         def on_str(node)
           return if node.parent&.regexp_type?
           return unless /(?<!\\)#\{.*\}/.match?(node.source)
           return if heredoc?(node)
           return unless node.loc.begin && node.loc.end
+          return unless valid_syntax?(node)
 
           add_offense(node) { |corrector| autocorrect(corrector, node) }
         end
+        # rubocop:enable Metrics/CyclomaticComplexity
 
         private
 
@@ -52,6 +51,12 @@ module RuboCop
 
         def heredoc?(node)
           node.loc.is_a?(Parser::Source::Map::Heredoc) || (node.parent && heredoc?(node.parent))
+        end
+
+        def valid_syntax?(node)
+          double_quoted_string = node.source.gsub(/\A'|'\z/, '"')
+
+          parse(double_quoted_string).valid_syntax?
         end
       end
     end

@@ -27,7 +27,10 @@ module RuboCop
     class VariableForce < Force # rubocop:disable Metrics/ClassLength
       VARIABLE_ASSIGNMENT_TYPE = :lvasgn
       REGEXP_NAMED_CAPTURE_TYPE = :match_with_lvasgn
-      VARIABLE_ASSIGNMENT_TYPES = [VARIABLE_ASSIGNMENT_TYPE, REGEXP_NAMED_CAPTURE_TYPE].freeze
+      PATTERN_MATCH_VARIABLE_TYPE = :match_var
+      VARIABLE_ASSIGNMENT_TYPES = [
+        VARIABLE_ASSIGNMENT_TYPE, REGEXP_NAMED_CAPTURE_TYPE, PATTERN_MATCH_VARIABLE_TYPE
+      ].freeze
 
       ARGUMENT_DECLARATION_TYPES = [
         :arg, :optarg, :restarg,
@@ -40,6 +43,7 @@ module RuboCop
       OPERATOR_ASSIGNMENT_TYPES = (LOGICAL_OPERATOR_ASSIGNMENT_TYPES + [:op_asgn]).freeze
 
       MULTIPLE_ASSIGNMENT_TYPE = :masgn
+      REST_ASSIGNMENT_TYPE = :splat
 
       VARIABLE_REFERENCE_TYPE = :lvar
 
@@ -111,6 +115,7 @@ module RuboCop
       NODE_HANDLER_METHOD_NAMES = [
         [VARIABLE_ASSIGNMENT_TYPE, :process_variable_assignment],
         [REGEXP_NAMED_CAPTURE_TYPE, :process_regexp_named_captures],
+        [PATTERN_MATCH_VARIABLE_TYPE, :process_pattern_match_variable],
         [MULTIPLE_ASSIGNMENT_TYPE, :process_variable_multiple_assignment],
         [VARIABLE_REFERENCE_TYPE, :process_variable_referencing],
         [RESCUE_TYPE, :process_rescue],
@@ -174,6 +179,14 @@ module RuboCop
         skip_children!
       end
 
+      def process_pattern_match_variable(node)
+        name = node.children.first
+
+        variable_table.declare_variable(name, node) unless variable_table.variable_exist?(name)
+
+        skip_children!
+      end
+
       def regexp_captured_names(node)
         regexp = node.to_regexp
 
@@ -181,15 +194,10 @@ module RuboCop
       end
 
       def process_variable_operator_assignment(node)
-        if LOGICAL_OPERATOR_ASSIGNMENT_TYPES.include?(node.type)
-          asgn_node, rhs_node = *node
-        else
-          asgn_node, _operator, rhs_node = *node
-        end
-
+        asgn_node = node.lhs
         return unless asgn_node.lvasgn_type?
 
-        name = asgn_node.children.first
+        name = asgn_node.name
 
         variable_table.declare_variable(name, asgn_node) unless variable_table.variable_exist?(name)
 
@@ -209,7 +217,7 @@ module RuboCop
         # before processing rhs nodes.
 
         variable_table.reference_variable(name, node)
-        process_node(rhs_node)
+        process_node(node.rhs)
         variable_table.assign_to_variable(name, asgn_node)
 
         skip_children!
@@ -342,8 +350,7 @@ module RuboCop
         when :lvasgn
           AssignmentReference.new(node)
         when *OPERATOR_ASSIGNMENT_TYPES
-          asgn_node = node.children.first
-          VariableReference.new(asgn_node.children.first) if asgn_node.lvasgn_type?
+          VariableReference.new(node.lhs.name) if node.lhs.lvasgn_type?
         end
       end
 

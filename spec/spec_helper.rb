@@ -4,6 +4,9 @@
 require 'rainbow'
 Rainbow.enabled = false
 
+require_relative 'support/strict_warnings'
+StrictWarnings.enable!
+
 require 'rubocop'
 require 'rubocop/cop/internal_affairs'
 require 'rubocop/server'
@@ -54,21 +57,10 @@ RSpec.configure do |config|
 
   config.after(:suite) { RuboCop::Cop::Registry.reset! }
 
-  if %w[ruby-head-ascii_spec ruby-head-spec].include? ENV.fetch('CIRCLE_JOB', nil)
-    config.filter_run_excluding broken_on: :ruby_head
-  end
+  config.filter_run_excluding broken_on: :ruby_head if ENV['CI_RUBY_VERSION'] == 'head'
+  config.filter_run_excluding broken_on: :jruby if RUBY_ENGINE == 'jruby'
+  config.filter_run_excluding broken_on: :prism if ENV['PARSER_ENGINE'] == 'parser_prism'
 
-  config.filter_run_excluding broken_on: :jruby if ENV.fetch('GITHUB_JOB', nil) == 'jruby'
-end
-
-module ::RSpec
-  module Core
-    class ExampleGroup
-      # Override `failure_count` from test-queue to prevent RSpec deprecation notice
-      # Treating `metadata[:execution_result]` as a hash is deprecated.
-      def self.failure_count
-        examples.map { |e| e.execution_result.status == 'failed' }.length
-      end
-    end
-  end
+  # Prism supports Ruby 3.3+ parsing.
+  config.filter_run_excluding unsupported_on: :prism if ENV['PARSER_ENGINE'] == 'parser_prism'
 end

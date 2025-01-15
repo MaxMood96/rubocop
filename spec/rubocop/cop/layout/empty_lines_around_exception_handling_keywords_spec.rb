@@ -97,6 +97,150 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLinesAroundExceptionHandlingKeywords, 
     RUBY
   end
 
+  it 'registers an offense when there is a blank line above `rescue` keyword in a block', :ruby25 do
+    expect_offense(<<~RUBY)
+      foo do
+        f1
+
+      #{message} before the `rescue`.
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo do
+        f1
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+  end
+
+  it 'registers an offense when `rescue` section starts with a blank line in a block', :ruby25 do
+    expect_offense(<<~RUBY)
+      foo do
+        f1
+      rescue
+
+      #{message} after the `rescue`.
+        f2
+      else
+        f3
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo do
+        f1
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+  end
+
+  it 'registers an offense when `rescue` section ends with a blank line in a block', :ruby25 do
+    expect_offense(<<~RUBY)
+      foo do
+        f1
+      rescue
+        f2
+
+      #{message} before the `else`.
+      else
+        f3
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo do
+        f1
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+  end
+
+  it 'registers an offense when there is a blank line above `rescue` keyword in a numbered block', :ruby27 do
+    expect_offense(<<~RUBY)
+      foo do
+        f1(_1)
+
+      #{message} before the `rescue`.
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo do
+        f1(_1)
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+  end
+
+  it 'registers an offense when `rescue` section starts with a blank line in a numbered block', :ruby27 do
+    expect_offense(<<~RUBY)
+      foo do
+        f1(_1)
+      rescue
+
+      #{message} after the `rescue`.
+        f2
+      else
+        f3
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo do
+        f1(_1)
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+  end
+
+  it 'registers an offense when `rescue` section ends with a blank line in a numbered block', :ruby27 do
+    expect_offense(<<~RUBY)
+      foo do
+        f1(_1)
+      rescue
+        f2
+
+      #{message} before the `else`.
+      else
+        f3
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      foo do
+        f1(_1)
+      rescue
+        f2
+      else
+        f3
+      end
+    RUBY
+  end
+
   include_examples 'accepts', 'no empty line', <<~RUBY
     begin
       f1
@@ -146,6 +290,29 @@ RSpec.describe RuboCop::Cop::Layout::EmptyLinesAroundExceptionHandlingKeywords, 
 
   include_examples 'accepts', '`def` and `rescue` are on the same line', <<~RUBY
     def do_something; foo; rescue => e; end
+  RUBY
+
+  include_examples 'accepts', '`ensure` and `end` are on the same line', <<~RUBY
+    def do_something
+    ensure end
+  RUBY
+
+  include_examples 'accepts', '`else` and `end` are on the same line', <<~RUBY
+    def do_something
+    rescue
+    else end
+  RUBY
+
+  include_examples 'accepts', '`ensure` body expression and `end` are on the same line', <<~RUBY
+    def do_something
+    foo
+    ensure bar end
+  RUBY
+
+  include_examples 'accepts', '`else` body expression and `end` are on the same line', <<~RUBY
+    def do_something
+    rescue
+    else foo end
   RUBY
 
   it 'with complex begin-end - registers many offenses' do

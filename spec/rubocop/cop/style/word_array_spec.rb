@@ -3,6 +3,8 @@
 require 'timeout'
 
 RSpec.describe RuboCop::Cop::Style::WordArray, :config do
+  include EncodingHelper
+
   before do
     # Reset data which is shared by all instances of WordArray
     described_class.largest_brackets = -Float::INFINITY
@@ -60,10 +62,7 @@ RSpec.describe RuboCop::Cop::Style::WordArray, :config do
 
     context 'when the default external encoding is UTF-8' do
       around do |example|
-        orig_encoding = Encoding.default_external
-        Encoding.default_external = Encoding::UTF_8
-        example.run
-        Encoding.default_external = orig_encoding
+        with_default_external_encoding(Encoding::UTF_8) { example.run }
       end
 
       it 'registers an offense for arrays of unicode word characters' do
@@ -80,10 +79,7 @@ RSpec.describe RuboCop::Cop::Style::WordArray, :config do
 
     context 'when the default external encoding is US-ASCII' do
       around do |example|
-        orig_encoding = Encoding.default_external
-        Encoding.default_external = Encoding::US_ASCII
-        example.run
-        Encoding.default_external = orig_encoding
+        with_default_external_encoding(Encoding::US_ASCII) { example.run }
       end
 
       it 'registers an offense for arrays of unicode word characters' do
@@ -244,7 +240,7 @@ RSpec.describe RuboCop::Cop::Style::WordArray, :config do
     end
 
     it 'autocorrects an array of words in multiple lines' do
-      expect_offense(<<-RUBY)
+      expect_offense(<<~RUBY)
         [
         ^ Use `%w` or `%W` for an array of words.
         "foo",
@@ -253,7 +249,7 @@ RSpec.describe RuboCop::Cop::Style::WordArray, :config do
         ]
       RUBY
 
-      expect_correction(<<-RUBY)
+      expect_correction(<<~RUBY)
         %w(
         foo
         bar
@@ -263,14 +259,14 @@ RSpec.describe RuboCop::Cop::Style::WordArray, :config do
     end
 
     it 'autocorrects an array of words using partial newlines' do
-      expect_offense(<<-RUBY)
+      expect_offense(<<~RUBY)
         ["foo", "bar", "baz",
         ^^^^^^^^^^^^^^^^^^^^^ Use `%w` or `%W` for an array of words.
         "boz", "buz",
         "biz"]
       RUBY
 
-      expect_correction(<<-RUBY)
+      expect_correction(<<~RUBY)
         %w(foo bar baz
         boz buz
         biz)
@@ -563,7 +559,7 @@ RSpec.describe RuboCop::Cop::Style::WordArray, :config do
       RUBY
     end
 
-    it "doesn't fail with `encoding: binary" do
+    it "doesn't fail with `encoding: binary`" do
       expect_no_offenses(<<~'RUBY')
         # -*- encoding: binary -*-
         ["\xC0"] # Invalid as UTF-8
@@ -661,6 +657,17 @@ RSpec.describe RuboCop::Cop::Style::WordArray, :config do
 
         expect_correction(<<~'RUBY')
           %w[) \] ( \[]
+        RUBY
+      end
+
+      it 'autocorrects balanced pairs of delimiters without excessive escaping' do
+        expect_offense(<<~RUBY)
+          ['a', 'b[]', 'c[][]']
+          ^^^^^^^^^^^^^^^^^^^^^ Use `%w` or `%W` for an array of words.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          %w[a b[] c[][]]
         RUBY
       end
     end

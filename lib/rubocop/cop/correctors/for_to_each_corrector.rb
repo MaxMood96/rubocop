@@ -15,6 +15,8 @@ module RuboCop
       end
 
       def call(corrector)
+        offending_range = for_node.source_range.begin.join(end_range)
+
         corrector.replace(offending_range, correction)
       end
 
@@ -37,14 +39,14 @@ module RuboCop
       def requires_parentheses?
         return true if collection_node.send_type? && collection_node.operator_method?
 
-        collection_node.range_type? || collection_node.or_type? || collection_node.and_type?
+        collection_node.range_type? || collection_node.operator_keyword?
       end
 
-      def end_position
+      def end_range
         if for_node.do?
-          keyword_begin.end_pos
+          keyword_begin.end
         else
-          collection_end.end_pos
+          collection_end.end
         end
       end
 
@@ -56,18 +58,8 @@ module RuboCop
         if collection_node.begin_type?
           collection_node.loc.end
         else
-          collection_node.loc.expression
+          collection_node.source_range
         end
-      end
-
-      def offending_range
-        replacement_range(end_position)
-      end
-
-      def replacement_range(end_pos)
-        Parser::Source::Range.new(for_node.loc.expression.source_buffer,
-                                  for_node.loc.expression.begin_pos,
-                                  end_pos)
       end
     end
   end

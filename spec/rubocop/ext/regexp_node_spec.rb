@@ -42,7 +42,7 @@ RSpec.describe RuboCop::Ext::RegexpNode do
       it 'returns the expected tree' do
         tree = node.parsed_tree
 
-        expect(tree.is_a?(Regexp::Expression::Root)).to be(true)
+        expect(tree).to be_a(Regexp::Expression::Root)
         expect(tree.map(&:token)).to eq(%i[literal whitespace comment])
       end
     end
@@ -51,7 +51,7 @@ RSpec.describe RuboCop::Ext::RegexpNode do
       it 'returns the expected blanked tree' do
         tree = node.parsed_tree
 
-        expect(tree.is_a?(Regexp::Expression::Root)).to be(true)
+        expect(tree).to be_a(Regexp::Expression::Root)
         expect(tree.to_s).to eq('foo      baz')
       end
     end
@@ -74,7 +74,7 @@ RSpec.describe RuboCop::Ext::RegexpNode do
       it 'returns the expected blanked tree' do
         tree = node.parsed_tree
 
-        expect(tree.is_a?(Regexp::Expression::Root)).to be(true)
+        expect(tree).to be_a(Regexp::Expression::Root)
         expect(tree.to_s.split("\n")).to eq(['', '  foo', ' ' * 32, '  baz'])
       end
     end
@@ -85,7 +85,7 @@ RSpec.describe RuboCop::Ext::RegexpNode do
       it 'returns the expected tree' do
         tree = node.parsed_tree
 
-        expect(tree.is_a?(Regexp::Expression::Root)).to be(true)
+        expect(tree).to be_a(Regexp::Expression::Root)
         expect(tree.to_s).to eq('foobaz')
       end
     end
@@ -96,7 +96,10 @@ RSpec.describe RuboCop::Ext::RegexpNode do
       it 'has location information' do
         nodes = node.parsed_tree.each_expression.map { |exp, _index| exp }
 
+        # `Parser::Source::Map` does not have `source_range` method.
+        # rubocop:disable InternalAffairs/LocationExpression
         sources = nodes.map { |n| n.loc.expression.source }
+        # rubocop:enable InternalAffairs/LocationExpression
 
         expect(sources).to eq %w{([a-z]+) [a-z]+ a-z a z \d* \s? (?:foo) foo}
 

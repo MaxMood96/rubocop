@@ -62,5 +62,9 @@ RSpec.describe RuboCop::Cop::Style::NilComparison, :config do
         !(x == nil)
       RUBY
     end
+
+    it 'registers no offense when there is no receiver' do
+      expect_no_offenses('nil?')
+    end
   end
 end

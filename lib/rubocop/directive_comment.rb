@@ -6,9 +6,11 @@ module RuboCop
   # cops it contains.
   class DirectiveComment
     # @api private
-    REDUNDANT_DIRECTIVE_COP_DEPARTMENT = 'Lint'
+    LINT_DEPARTMENT = 'Lint'
     # @api private
-    REDUNDANT_DIRECTIVE_COP = "#{REDUNDANT_DIRECTIVE_COP_DEPARTMENT}/RedundantCopDisableDirective"
+    LINT_REDUNDANT_DIRECTIVE_COP = "#{LINT_DEPARTMENT}/RedundantCopDisableDirective"
+    # @api private
+    LINT_SYNTAX_COP = "#{LINT_DEPARTMENT}/Syntax"
     # @api private
     COP_NAME_PATTERN = '([A-Z]\w+/)*(?:[A-Z]\w+)'
     # @api private
@@ -45,9 +47,9 @@ module RuboCop
 
     def range
       match = comment.text.match(DIRECTIVE_COMMENT_REGEXP)
-      begin_pos = comment.loc.expression.begin_pos
+      begin_pos = comment.source_range.begin_pos
       Parser::Source::Range.new(
-        comment.loc.expression.source_buffer, begin_pos + match.begin(0), begin_pos + match.end(0)
+        comment.source_range.source_buffer, begin_pos + match.begin(0), begin_pos + match.end(0)
       )
     end
 
@@ -86,10 +88,15 @@ module RuboCop
       @cop_names ||= all_cops? ? all_cop_names : parsed_cop_names
     end
 
+    # Returns an array of cops for this directive comment, without resolving departments
+    def raw_cop_names
+      @raw_cop_names ||= (cops || '').split(/,\s*/)
+    end
+
     # Returns array of specified in this directive department names
     # when all department disabled
     def department_names
-      splitted_cops_string.select { |cop| department?(cop) }
+      raw_cop_names.select { |cop| department?(cop) }
     end
 
     # Checks if directive departments include cop
@@ -99,28 +106,25 @@ module RuboCop
 
     # Checks if cop department has already used in directive comment
     def overridden_by_department?(cop)
-      in_directive_department?(cop) && splitted_cops_string.include?(cop)
+      in_directive_department?(cop) && raw_cop_names.include?(cop)
     end
 
     def directive_count
-      splitted_cops_string.count
+      raw_cop_names.count
     end
 
     # Returns line number for directive
     def line_number
-      comment.loc.expression.line
+      comment.source_range.line
     end
 
     private
 
-    def splitted_cops_string
-      (cops || '').split(/,\s*/)
-    end
-
     def parsed_cop_names
-      splitted_cops_string.map do |name|
+      cops = raw_cop_names.map do |name|
         department?(name) ? cop_names_for_department(name) : name
       end.flatten
+      cops - [LINT_SYNTAX_COP]
     end
 
     def department?(name)
@@ -128,17 +132,16 @@ module RuboCop
     end
 
     def all_cop_names
-      exclude_redundant_directive_cop(cop_registry.names)
+      exclude_lint_department_cops(cop_registry.names)
     end
 
     def cop_names_for_department(department)
       names = cop_registry.names_for_department(department)
-      has_redundant_directive_cop = department == REDUNDANT_DIRECTIVE_COP_DEPARTMENT
-      has_redundant_directive_cop ? exclude_redundant_directive_cop(names) : names
+      department == LINT_DEPARTMENT ? exclude_lint_department_cops(names) : names
     end
 
-    def exclude_redundant_directive_cop(cops)
-      cops - [REDUNDANT_DIRECTIVE_COP]
+    def exclude_lint_department_cops(cops)
+      cops - [LINT_REDUNDANT_DIRECTIVE_COP, LINT_SYNTAX_COP]
     end
   end
 end

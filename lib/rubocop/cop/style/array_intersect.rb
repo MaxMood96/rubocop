@@ -11,6 +11,15 @@ module RuboCop
       # The `array1.intersect?(array2)` method is faster than
       # `(array1 & array2).any?` and is more readable.
       #
+      # In cases like the following, compatibility is not ensured,
+      # so it will not be detected when using block argument.
+      #
+      # [source,ruby]
+      # ----
+      # ([1] & [1,2]).any? { |x| false }    # => false
+      # [1].intersect?([1,2]) { |x| false } # => true
+      # ----
+      #
       # @safety
       #   This cop cannot guarantee that `array1` and `array2` are
       #   actually arrays while method `intersect?` is for arrays only.
@@ -19,6 +28,7 @@ module RuboCop
       #   # bad
       #   (array1 & array2).any?
       #   (array1 & array2).empty?
+      #   (array1 & array2).none?
       #
       #   # good
       #   array1.intersect?(array2)
@@ -48,7 +58,7 @@ module RuboCop
           (send
             (begin
               (send $(...) :& $(...))
-            ) ${:any? :empty?}
+            ) ${:any? :empty? :none?}
           )
         PATTERN
 
@@ -57,27 +67,26 @@ module RuboCop
           (send
             (begin
               (send $(...) :& $(...))
-            ) ${:present? :any? :blank? :empty?}
+            ) ${:present? :any? :blank? :empty? :none?}
           )
         PATTERN
 
         MSG = 'Use `%<negated>s%<receiver>s.intersect?(%<argument>s)` ' \
               'instead of `(%<receiver>s & %<argument>s).%<method_name>s`.'
         STRAIGHT_METHODS = %i[present? any?].freeze
-        NEGATED_METHODS = %i[blank? empty?].freeze
+        NEGATED_METHODS = %i[blank? empty? none?].freeze
         RESTRICT_ON_SEND = (STRAIGHT_METHODS + NEGATED_METHODS).freeze
 
         def on_send(node)
+          return if node.block_literal?
           return unless (receiver, argument, method_name = bad_intersection_check?(node))
 
           message = message(receiver.source, argument.source, method_name)
 
           add_offense(node, message: message) do |corrector|
-            if straight?(method_name)
-              corrector.replace(node, "#{receiver.source}.intersect?(#{argument.source})")
-            else
-              corrector.replace(node, "!#{receiver.source}.intersect?(#{argument.source})")
-            end
+            bang = straight?(method_name) ? '' : '!'
+
+            corrector.replace(node, "#{bang}#{receiver.source}.intersect?(#{argument.source})")
           end
         end
 

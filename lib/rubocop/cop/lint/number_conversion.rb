@@ -9,7 +9,7 @@ module RuboCop
       #
       # Conversion with `Integer`, `Float`, etc. will raise an `ArgumentError`
       # if given input that is not numeric (eg. an empty string), whereas
-      # `to_i`, etc. will try to convert regardless of input (`''.to_i => 0`).
+      # `to_i`, etc. will try to convert regardless of input (``''.to_i => 0``).
       # As such, this cop is disabled by default because it's not necessarily
       # always correct to raise if a value is not numeric.
       #
@@ -90,19 +90,24 @@ module RuboCop
 
         # @!method to_method(node)
         def_node_matcher :to_method, <<~PATTERN
-          (send $_ ${#{METHODS}})
+          (call $_ ${#{METHODS}})
         PATTERN
 
         # @!method to_method_symbol(node)
         def_node_matcher :to_method_symbol, <<~PATTERN
-          {(send _ $_ ${(sym ${#{METHODS}})} ...)
-           (send _ $_ ${(block_pass (sym ${#{METHODS}}))} ...)}
+          (call _ $_ ${
+            {
+              (sym ${#{METHODS}})
+              (block_pass (sym ${#{METHODS}}))
+            }
+          } ...)
         PATTERN
 
         def on_send(node)
           handle_conversion_method(node)
           handle_as_symbol(node)
         end
+        alias on_csend on_send
 
         private
 
@@ -116,7 +121,11 @@ module RuboCop
               corrected_method: correct_method(node, receiver)
             )
             add_offense(node, message: message) do |corrector|
+              next if part_of_ignored_node?(node)
+
               corrector.replace(node, correct_method(node, node.receiver))
+
+              ignore_node(node)
             end
           end
         end

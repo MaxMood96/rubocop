@@ -20,9 +20,14 @@ module RuboCop
       #   # good
       #   fooBar = 1
       #
+      # @example AllowedIdentifiers: ['fooBar']
+      #   # good (with EnforcedStyle: snake_case)
+      #   fooBar = 1
+      #
       # @example AllowedPatterns: ['_v\d+\z']
-      #   # good
+      #   # good (with EnforcedStyle: camelCase)
       #   :release_v1
+      #
       class VariableName < Base
         include AllowedIdentifiers
         include ConfigurableNaming
@@ -35,11 +40,10 @@ module RuboCop
         end
 
         def on_lvasgn(node)
-          name, = *node
-          return unless name
-          return if allowed_identifier?(name)
+          return unless node.name
+          return if allowed_identifier?(node.name)
 
-          check_name(node, name, node.loc.name)
+          check_name(node, node.name, node.loc.name)
         end
         alias on_ivasgn    on_lvasgn
         alias on_cvasgn    on_lvasgn

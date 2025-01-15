@@ -148,7 +148,7 @@ RSpec.describe RuboCop::Cop::Layout::SpaceInsideBlockBraces, :config do
     RUBY
   end
 
-  it 'register offenses and correct both braces without inner space' do
+  it 'registers offenses and correct both braces without inner space' do
     expect_offense(<<~RUBY)
       a {}
       b { }
@@ -327,6 +327,14 @@ RSpec.describe RuboCop::Cop::Layout::SpaceInsideBlockBraces, :config do
 
     it 'accepts left brace without outer space' do
       expect_no_offenses('each{puts}')
+    end
+
+    it 'accepts when a method call with a multiline block is used as an argument' do
+      expect_no_offenses(<<~RUBY)
+        foo bar { |arg|
+          baz(arg)
+        }
+      RUBY
     end
 
     context 'with passed in parameters' do

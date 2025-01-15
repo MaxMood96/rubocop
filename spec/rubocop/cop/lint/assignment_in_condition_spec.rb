@@ -182,6 +182,19 @@ RSpec.describe RuboCop::Cop::Lint::AssignmentInCondition, :config do
     RUBY
   end
 
+  it 'registers an offense for assignment methods with safe navigation operator' do
+    expect_offense(<<~RUBY)
+      if test&.method = 10
+                      ^ Use `==` if you meant to do a comparison or wrap the expression in parentheses to indicate you meant to assign in a condition.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      if (test&.method = 10)
+      end
+    RUBY
+  end
+
   it 'does not blow up for empty if condition' do
     expect_no_offenses(<<~RUBY)
       if ()
@@ -193,6 +206,12 @@ RSpec.describe RuboCop::Cop::Lint::AssignmentInCondition, :config do
     expect_no_offenses(<<~RUBY)
       unless ()
       end
+    RUBY
+  end
+
+  it 'does not register an offense for assignment in method call' do
+    expect_no_offenses(<<~RUBY)
+      return unless %i[asc desc].include?(order = params[:order])
     RUBY
   end
 
@@ -209,6 +228,62 @@ RSpec.describe RuboCop::Cop::Lint::AssignmentInCondition, :config do
         if (test[0] = 10)
         end
       RUBY
+    end
+
+    %i[&& ||].each do |operator|
+      context "with an unparenthesized assignment inside a parenthesized #{operator} statement" do
+        %i[if while until].each do |keyword|
+          context "inside an #{keyword} statement" do
+            it 'registers an offense and corrects' do
+              expect_offense(<<~RUBY, keyword: keyword, operator: operator)
+                %{keyword} (foo == bar %{operator} test = 10)
+                _{keyword}             _{operator}      ^ Use `==` if you meant to do a comparison or wrap the expression in parentheses to indicate you meant to assign in a condition.
+                end
+              RUBY
+
+              expect_correction(<<~RUBY)
+                #{keyword} (foo == bar #{operator} (test = 10))
+                end
+              RUBY
+            end
+
+            it 'registers an offense and corrects inside nested parentheses' do
+              expect_offense(<<~RUBY, keyword: keyword, operator: operator)
+                %{keyword} ((foo == bar %{operator} test = 10))
+                _{keyword}              _{operator}      ^ Use `==` if you meant to do a comparison or wrap the expression in parentheses to indicate you meant to assign in a condition.
+                end
+              RUBY
+
+              expect_correction(<<~RUBY)
+                #{keyword} ((foo == bar #{operator} (test = 10)))
+                end
+              RUBY
+            end
+          end
+
+          context "inside an #{keyword} modifier" do
+            it 'registers an offense and corrects' do
+              expect_offense(<<~RUBY, keyword: keyword, operator: operator)
+                do_something %{keyword} (foo == bar %{operator} test = 10)
+                             _{keyword}             _{operator}      ^ Use `==` if you meant to do a comparison or wrap the expression in parentheses to indicate you meant to assign in a condition.
+              RUBY
+
+              expect_correction(<<~RUBY)
+                do_something #{keyword} (foo == bar #{operator} (test = 10))
+              RUBY
+            end
+          end
+        end
+      end
+
+      context "with a compound assignment using #{operator} inside parentheses" do
+        it 'does not register an offense' do
+          expect_no_offenses(<<~RUBY)
+            if (test = foo #{operator} bar == baz)
+            end
+          RUBY
+        end
+      end
     end
   end
 
@@ -233,6 +308,57 @@ RSpec.describe RuboCop::Cop::Lint::AssignmentInCondition, :config do
       RUBY
 
       expect_no_corrections
+    end
+
+    %i[&& ||].each do |operator|
+      context "with an unparenthesized assignment inside a parenthesized #{operator} statement" do
+        %i[if while until].each do |keyword|
+          context "inside an #{keyword} statement" do
+            it 'registers an offense but does not correct' do
+              expect_offense(<<~RUBY, keyword: keyword, operator: operator)
+                %{keyword} (foo == bar %{operator} test = 10)
+                _{keyword}             _{operator}      ^ Use `==` if you meant to do a comparison or move the assignment up out of the condition.
+                end
+              RUBY
+
+              expect_no_corrections
+            end
+
+            it 'registers an offense but does not correct inside nested parentheses' do
+              expect_offense(<<~RUBY, keyword: keyword, operator: operator)
+                %{keyword} ((foo == bar %{operator} test = 10))
+                _{keyword}              _{operator}      ^ Use `==` if you meant to do a comparison or move the assignment up out of the condition.
+                end
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+
+          context "inside an #{keyword} modifier" do
+            it 'registers an offense but does not correct' do
+              expect_offense(<<~RUBY, keyword: keyword, operator: operator)
+                do_something %{keyword} (foo == bar %{operator} test = 10)
+                             _{keyword}             _{operator}      ^ Use `==` if you meant to do a comparison or move the assignment up out of the condition.
+              RUBY
+
+              expect_no_corrections
+            end
+          end
+        end
+      end
+
+      context "with a compound assignment using #{operator} inside parentheses" do
+        it 'registers an offense but does not correct' do
+          expect_offense(<<~RUBY)
+            if (test = foo #{operator} bar == baz)
+                     ^ Use `==` if you meant to do a comparison or move the assignment up out of the condition.
+            end
+          RUBY
+
+          expect_no_corrections
+        end
+      end
     end
   end
 end

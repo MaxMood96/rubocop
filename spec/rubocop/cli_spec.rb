@@ -27,9 +27,9 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
         Dir.chdir('other') { expect(cli.run(['--format', 'simple', checked_path])).to eq(1) }
         expect($stdout.string).to eq(<<~RESULT)
           == #{abs('Rakefile')} ==
-          W:  3:  1: Lint/UselessAssignment: Useless assignment to variable - x.
+          W:  3:  1: [Correctable] Lint/UselessAssignment: Useless assignment to variable - x.
 
-          1 file inspected, 1 offense detected
+          1 file inspected, 1 offense detected, 1 offense autocorrectable
         RESULT
       end
     end
@@ -83,6 +83,24 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       expect($stderr.string).to eq(<<~RESULT)
         #{abs('.rubocop.yml')}: Warning: no department given for EndOfLine.
       RESULT
+    end
+  end
+
+  context 'when using an invalid encoding string' do
+    it 'does not crash and reports an offense' do
+      create_file('example.rb', <<~'RUBY')
+        "\xE3\xD3\x8B\xE3\x83\xBC\x83\xE3\x83\xE3\x82\xB3\xA3\x82\x99"
+      RUBY
+      result = cli.run(['--format', 'simple', 'example.rb'])
+      expect(result).to eq(1)
+      expect($stdout.string)
+        .to eq(<<~RESULT)
+          == example.rb ==
+          C:  1:  1: [Correctable] Style/FrozenStringLiteralComment: Missing frozen string literal comment.
+
+          1 file inspected, 1 offense detected, 1 offense autocorrectable
+      RESULT
+      expect($stderr.string).to eq ''
     end
   end
 
@@ -149,8 +167,8 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
     expect(cli.run(['--format', 'emacs', 'example.rb'])).to eq(1)
     expect($stderr.string).to eq ''
     expect($stdout.string)
-      .to eq(["#{abs('example.rb')}:3:1: E: Lint/Syntax: unexpected " \
-              'token $end (Using Ruby 2.6 parser; configure using ' \
+      .to eq(["#{abs('example.rb')}:3:1: F: Lint/Syntax: unexpected " \
+              'token $end (Using Ruby 2.7 parser; configure using ' \
               '`TargetRubyVersion` parameter, under `AllCops`)',
               ''].join("\n"))
   end
@@ -202,14 +220,27 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
     #       In other words, even if no option is specified, it will be parallelized by default.
     describe 'when parallel static by default' do
       context 'when specifying `--debug` option only`' do
-        it 'fails with an error message' do
+        it 'uses parallel inspection' do
           create_file('example1.rb', <<~RUBY)
             # frozen_string_literal: true
 
             puts 'hello'
           RUBY
           expect(cli.run(['--debug'])).to eq(0)
-          expect($stdout.string.include?('Use parallel by default.')).to be(true)
+          expect($stdout.string).to include('Use parallel by default.')
+        end
+      end
+
+      context 'when specifying configuration file' do
+        it 'uses parallel inspection' do
+          create_file('example1.rb', <<~RUBY)
+            # frozen_string_literal: true
+
+            puts 'hello'
+          RUBY
+          create_empty_file('.rubocop.yml')
+          expect(cli.run(['--debug', '--config', '.rubocop.yml'])).to eq(0)
+          expect($stdout.string).to include('Use parallel by default.')
         end
       end
 
@@ -221,7 +252,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
             puts "hello"
           RUBY
           expect(cli.run(['--debug', '-a'])).to eq(0)
-          expect($stdout.string.include?('Use parallel by default.')).to be(true)
+          expect($stdout.string).to include('Use parallel by default.')
           expect(File.read('example1.rb')).to eq(<<~RUBY)
             # frozen_string_literal: true
 
@@ -231,7 +262,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       end
 
       context 'when setting `UseCache: true`' do
-        it 'fails with an error message' do
+        it 'uses parallel inspection' do
           create_file('example.rb', <<~RUBY)
             # frozen_string_literal: true
 
@@ -242,12 +273,12 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
               UseCache: true
           YAML
           expect(cli.run(['--debug'])).to eq(0)
-          expect($stdout.string.include?('Use parallel by default.')).to be(true)
+          expect($stdout.string).to include('Use parallel by default.')
         end
       end
 
       context 'when setting `UseCache: false`' do
-        it 'fails with an error message' do
+        it 'does not use parallel inspection' do
           create_file('example.rb', <<~RUBY)
             # frozen_string_literal: true
 
@@ -258,7 +289,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
               UseCache: false
           YAML
           expect(cli.run(['--debug'])).to eq(0)
-          expect($stdout.string.include?('Use parallel by default.')).to be(false)
+          expect($stdout.string).not_to include('Use parallel by default.')
         end
       end
     end
@@ -300,9 +331,121 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
       expect($stdout.string).to eq(<<~RESULT)
         == example.rb ==
-        W:  5:  1: Lint/UselessAssignment: Useless assignment to variable - b.
+        W:  5:  1: [Correctable] Lint/UselessAssignment: Useless assignment to variable - b.
 
-        1 file inspected, 1 offense detected
+        1 file inspected, 1 offense detected, 1 offense autocorrectable
+      RESULT
+    end
+
+    it '`Lint/Syntax` must be enabled when `Lint` is given `Enabled: false`' do
+      create_file('.rubocop.yml', <<~YAML)
+        Lint:
+          Enabled: false
+      YAML
+
+      create_file('example.rb', <<~RUBY)
+        1 /// 2
+      RUBY
+
+      expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
+      expect($stdout.string).to include('F:  1:  7: Lint/Syntax: unexpected token tINTEGER')
+    end
+
+    it '`Lint/Syntax` must be enabled when `DisabledByDefault: true`' do
+      create_file('.rubocop.yml', <<~YAML)
+        AllCops:
+          DisabledByDefault: true
+      YAML
+
+      create_file('example.rb', <<~RUBY)
+        1 /// 2
+      RUBY
+
+      expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
+      expect($stdout.string).to include('F:  1:  7: Lint/Syntax: unexpected token tINTEGER')
+    end
+
+    it '`Lint/Syntax` must be enabled when disabled by directive comment' do
+      create_file('example.rb', <<~RUBY)
+        # rubocop:disable Lint/Syntax
+        1 /// 2
+      RUBY
+
+      expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
+      expect($stdout.string).to include('F:  2:  7: Lint/Syntax: unexpected token tINTEGER')
+    end
+
+    it '`Lint/Syntax` must be enabled when disabled by directive department comment' do
+      create_file('example.rb', <<~RUBY)
+        # rubocop:disable Lint
+        1 /// 2
+      RUBY
+
+      expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
+      expect($stdout.string).to include('F:  2:  7: Lint/Syntax: unexpected token tINTEGER')
+    end
+
+    it '`Lint/Syntax` must be enabled when disabled by directive all comment' do
+      create_file('example.rb', <<~RUBY)
+        # rubocop:disable all
+        1 /// 2
+      RUBY
+
+      expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
+      expect($stdout.string).to include('F:  2:  7: Lint/Syntax: unexpected token tINTEGER')
+    end
+
+    it '`Naming/FileName` must be be disabled for global offenses' do
+      create_file('Example.rb', <<~RUBY)
+        # rubocop:disable Naming/FileName
+      RUBY
+
+      expect(cli.run(['--format', 'simple', 'Example.rb'])).to eq(1)
+      expect($stdout.string).not_to include('Naming/FileName:')
+    end
+
+    it '`Naming/FileName` must be be enabled if directive comment is on unrelated line' do
+      create_file('Example.rb', <<~RUBY)
+        # Prelude
+        # rubocop:disable Naming/FileName
+      RUBY
+
+      expect(cli.run(['--format', 'simple', 'Example.rb'])).to eq(1)
+      expect($stdout.string).to include('C:  1:  1: Naming/FileName:')
+    end
+  end
+
+  describe 'for a cop enabled only for a subset of files' do
+    it "doesn't enable the cop for all files when department disables are present" do
+      create_file('.rubocop.yml', <<~YAML)
+        AllCops:
+          DisabledByDefault: true
+
+        Style/HashSyntax:
+          Enabled: true
+          Exclude:
+            - example1.rb
+      YAML
+
+      source = <<~RUBY
+        { :a => :b }
+        # rubocop:disable Style
+        { :a => :b }
+        # rubocop:enable Style
+        # rubocop:disable all
+        { :a => :b }
+        # rubocop:enable all
+      RUBY
+
+      create_file('example1.rb', source)
+      create_file('example2.rb', source)
+
+      expect(cli.run(['--format', 'simple', 'example1.rb', 'example2.rb'])).to eq(1)
+      expect($stdout.string).to eq(<<~RESULT)
+        == example2.rb ==
+        C:  1:  3: [Correctable] Style/HashSyntax: Use the new Ruby 1.9 hash syntax.
+
+        2 files inspected, 1 offense detected, 1 offense autocorrectable
       RESULT
     end
   end
@@ -373,7 +516,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
         expect(cli.run(['--format', 'offenses', '-A', 'example.rb'])).to eq(0)
         expect($stdout.string).to eq(<<~RESULT)
 
-          1  Style/FrozenStringLiteralComment
+          1  Style/FrozenStringLiteralComment [Unsafe Correctable]
           --
           1  Total in 1 files
 
@@ -406,7 +549,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       expect(cli.run(['--format', 'emacs', 'example.rb'])).to eq(1)
       expect($stderr.string)
         .to eq(['example.rb: Style/LineLength has the wrong ' \
-                'namespace - should be Layout',
+                'namespace - replace it with Layout/LineLength',
                 ''].join("\n"))
       # 2 real cops were disabled, and 1 that was incorrect
       # 2 real cops was enabled, but only 1 had been disabled correctly
@@ -420,7 +563,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
     it 'can disable all cops on a single line' do
       create_file('example.rb', 'y("123", 123456) # rubocop:disable all')
       expect(cli.run(['--format', 'emacs', 'example.rb'])).to eq(0)
-      expect($stdout.string.empty?).to be(true)
+      expect($stdout.string).to be_empty
     end
 
     it 'can disable selected cops on a single line' do
@@ -501,7 +644,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
             assert_equal nil, combinator {}.call # rubocop:disable Lint/EmptyBlock'
           RUBY
           expect(cli.run(['example.rb'])).to eq(0)
-          expect($stdout.string.include?('1 file inspected, no offenses detected')).to be(true)
+          expect($stdout.string).to include('1 file inspected, no offenses detected')
         end
       end
 
@@ -521,7 +664,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
             end
           RUBY
           expect(cli.run(['example.rb'])).to eq(0)
-          expect($stdout.string.include?('1 file inspected, no offenses detected')).to be(true)
+          expect($stdout.string).to include('1 file inspected, no offenses detected')
         end
       end
 
@@ -667,7 +810,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
 
             expect($stdout.string).to eq(<<~RESULT)
 
-              1  Style/AndOr
+              1  Style/AndOr [Unsafe Correctable]
               --
               1  Total in 1 files
 
@@ -683,8 +826,8 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
 
             expect($stdout.string).to eq(<<~RESULT)
 
-              3  Layout/LineLength
-              1  Style/AndOr
+              3  Layout/LineLength [Safe Correctable]
+              1  Style/AndOr [Unsafe Correctable]
               --
               4  Total in 1 files
 
@@ -704,7 +847,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
 
             expect($stdout.string).to eq(<<~RESULT)
 
-              3  Layout/LineLength
+              3  Layout/LineLength [Safe Correctable]
               --
               3  Total in 1 files
 
@@ -720,8 +863,8 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
 
             expect($stdout.string).to eq(<<~RESULT)
 
-              3  Layout/LineLength
-              1  Style/AndOr
+              3  Layout/LineLength [Safe Correctable]
+              1  Style/AndOr [Unsafe Correctable]
               --
               4  Total in 1 files
 
@@ -864,10 +1007,8 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
               - "="
         YAML
         expect(cli.run([])).to eq(2)
-        expect($stderr.string.include?('obsolete parameter ' \
-                                       '`MultiSpaceAllowedForOperators` ' \
-                                       '(for `Layout/SpaceAroundOperators`) ' \
-                                       'found')).to be(true)
+        expect($stderr.string).to include('obsolete parameter `MultiSpaceAllowedForOperators` ' \
+                                          '(for `Layout/SpaceAroundOperators`) found')
       end
     end
 
@@ -903,6 +1044,27 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
           'Error: The `Layout/MultilineOperationIndentation` cop only accepts ' \
           'an `IndentationWidth` configuration parameter when ' \
           '`EnforcedStyle` is `indented`.'
+        )
+      end
+    end
+
+    context 'when Naming/PredicateName has predicate prefix forbidden which is not listed in NamePrefix' do
+      it 'fails with an error message' do
+        create_file('example.rb', 'puts 1')
+        create_file('.rubocop.yml', <<~YAML)
+          Naming/PredicateName:
+            NamePrefix:
+              - is_
+              - has_
+            ForbiddenPrefixes:
+              - is_
+              - has_
+              - seems_to_be_
+        YAML
+        expect(cli.run(['example.rb'])).to eq(2)
+        expect($stderr.string.strip).to eq(
+          'Error: The `Naming/PredicateName` cop is misconfigured. Prefix seems_to_be_ must be ' \
+          'included in NamePrefix because it is included in ForbiddenPrefixes.'
         )
       end
     end
@@ -1015,7 +1177,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       expect($stdout.string)
         .to eq(<<~RESULT)
 
-          1  Layout/TrailingWhitespace
+          1  Layout/TrailingWhitespace [Safe Correctable]
           --
           1  Total in 1 files
 
@@ -1026,7 +1188,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       create_file('file.rb', 'x=0') # Included by default
       create_file('example', 'x=0')
       create_file('regexp', 'x=0')
-      create_file('vendor/bundle/ruby/2.6.0/gems/backports-3.6.8/.irbrc', 'x=0')
+      create_file('vendor/bundle/ruby/2.7.0/gems/backports-3.6.8/.irbrc', 'x=0')
       create_file('.dot1/file.rb', 'x=0') # Hidden but explicitly included
       create_file('.dot2/file.rb', 'x=0') # Hidden, excluded by default
       create_file('.dot3/file.rake', 'x=0') # Hidden, not included by wildcard
@@ -1050,6 +1212,31 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
                                                     abs('regexp')])
     end
 
+    context 'when a .rubocop.yml is included from an ancestor directory' do
+      before do
+        create_file('child/grandkid/.rubocop.yml', <<~YAML)
+          inherit_from:
+            - ../../.rubocop.yml
+        YAML
+      end
+
+      context 'and it specifies an Include pattern' do
+        before do
+          create_file('.rubocop.yml', <<~YAML)
+            AllCops:
+              Include:
+                - "**/*.rbi"
+          YAML
+        end
+
+        it 'finds files included through inheritance' do
+          create_file('child/grandkid/file.rbi', 'x=0')
+          Dir.chdir('child/grandkid') { expect(cli.run(['-L'])).to eq(0) }
+          expect($stdout.string).to eq("file.rbi\n")
+        end
+      end
+    end
+
     it 'ignores excluded files' do
       create_file('example.rb', ['x = 0', 'puts x'])
       create_file('regexp.rb', ['x = 0', 'puts x'])
@@ -1063,6 +1250,23 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       YAML
       expect(cli.run(%w[--format simple])).to eq(0)
       expect($stdout.string).to eq(['', '0 files inspected, no offenses detected', ''].join("\n"))
+    end
+
+    it 'works when `AllCops:Exclude` is empty' do
+      create_file('example.rb', ['x = 0', 'puts x'])
+      create_file('.rubocop.yml', <<~YAML)
+        AllCops:
+          Exclude:
+      YAML
+
+      expect(cli.run(%w[--format simple])).to eq(1)
+      expect($stdout.string).to eq(<<~STDOUT)
+        == example.rb ==
+        C:  1:  1: [Correctable] Style/FrozenStringLiteralComment: Missing frozen string literal comment.
+
+        1 file inspected, 1 offense detected, 1 offense autocorrectable
+      STDOUT
+      expect($stderr.string).to eq ''
     end
 
     it 'only reads configuration in explicitly included hidden directories' do
@@ -1096,9 +1300,9 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       expect($stdout.string)
         .to eq(<<~RESULT)
           == .other/example.rb ==
-          W:  3:  1: Lint/UselessAssignment: Useless assignment to variable - x.
+          W:  3:  1: [Correctable] Lint/UselessAssignment: Useless assignment to variable - x.
 
-          1 file inspected, 1 offense detected
+          1 file inspected, 1 offense detected, 1 offense autocorrectable
         RESULT
     end
 
@@ -1159,7 +1363,6 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
           Exclude:
             - ignored/**
       YAML
-      expect(File).not_to receive(:open).with(%r{/ignored/})
       expect(cli.run(%w[--format simple example])).to eq(0)
       expect($stdout.string).to eq(<<~OUTPUT)
 
@@ -1230,8 +1433,8 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
           Enabled: false
       YAML
       expect(cli.run(['--format', 'emacs', 'example.rb'])).to eq(2)
-      expect($stderr.string.include?('Error: configuration for Lint/Syntax cop found')).to be(true)
-      expect($stderr.string.include?('It\'s not possible to disable this cop.')).to be(true)
+      expect($stderr.string).to include('Error: configuration for Lint/Syntax cop found')
+      expect($stderr.string).to include('It\'s not possible to disable this cop.')
     end
 
     it 'can be configured to merge a parameter that is a hash' do
@@ -1573,18 +1776,19 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
 
       expect(cli.run(%w[--format simple example])).to eq(1)
 
-      expect($stderr.string).to eq(<<-RESULT.strip_margin('|'))
-        |Warning: Layout/LineLength does not support Min parameter.
-        |
-        |Supported parameters are:
-        |
-        |  - Enabled
-        |  - Max
-        |  - AllowHeredoc
-        |  - AllowURI
-        |  - URISchemes
-        |  - IgnoreCopDirectives
-        |  - AllowedPatterns
+      expect($stderr.string).to eq(<<~RESULT)
+        Warning: Layout/LineLength does not support Min parameter.
+
+        Supported parameters are:
+
+          - Enabled
+          - Max
+          - AllowHeredoc
+          - AllowURI
+          - URISchemes
+          - IgnoreCopDirectives
+          - AllowedPatterns
+          - SplitStrings
       RESULT
     end
 
@@ -1741,6 +1945,29 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
   end
 
   describe 'configuration of `AutoCorrect`' do
+    context 'when setting `AutoCorrect: disabled` for `Style/StringLiterals`' do
+      before do
+        create_file('.rubocop.yml', <<~YAML)
+          Style/StringLiterals:
+            AutoCorrect: disabled
+        YAML
+      end
+
+      it 'does not suggest `1 offense autocorrectable` for `Style/StringLiterals`' do
+        create_file('example.rb', <<~RUBY)
+          # frozen_string_literal: true
+
+          a = "Hello"
+        RUBY
+
+        expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
+        expect($stdout.string.lines.to_a.last).to eq(
+          "1 file inspected, 2 offenses detected, 1 offense autocorrectable\n"
+        )
+      end
+    end
+
+    # For backward compatibility, `false` is treated the same as `'disabled'`.
     context 'when setting `AutoCorrect: false` for `Style/StringLiterals`' do
       before do
         create_file('.rubocop.yml', <<~YAML)
@@ -1757,7 +1984,9 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
         RUBY
 
         expect(cli.run(['--format', 'simple', 'example.rb'])).to eq(1)
-        expect($stdout.string.lines.to_a.last).to eq("1 file inspected, 2 offenses detected\n")
+        expect($stdout.string.lines.to_a.last).to eq(
+          "1 file inspected, 2 offenses detected, 1 offense autocorrectable\n"
+        )
       end
     end
   end
@@ -1774,7 +2003,7 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
           'Error: RuboCop found unknown Ruby version 4.0 in `TargetRubyVersion`'
         )
         expect($stderr.string.strip).to match(
-          /Supported versions: 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.0, 3.1, 3.2, 3.3/
+          /Supported versions: 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.0, 3.1, 3.2, 3.3, 3.4/
         )
       end
     end
@@ -1947,9 +2176,74 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
       it 'is an invalid configuration' do
         expect(cli.run(['--format', 'simple', 'test.rb'])).to eq(2)
         expect(
-          $stderr.string.include?('Error: configuration for Lint/Syntax cop found in .rubocop.yml')
-        ).to be(true)
+          $stderr.string
+        ).to include('Error: configuration for Lint/Syntax cop found in .rubocop.yml')
       end
+    end
+
+    context 'when `Lint` is given `Severity: info`' do
+      let(:code) do
+        <<~RUBY
+          1 /// 2
+        RUBY
+      end
+
+      before do
+        create_file('.rubocop.yml', <<~YAML)
+          Lint:
+            Severity: info
+        YAML
+      end
+
+      it '`Lint/Syntax` severity `fatal` cannot be changed by configuration' do
+        expect(cli.run(['--format', 'simple', 'test.rb'])).to eq(1)
+        expect($stdout.string).to include('F:  1:  7: Lint/Syntax: unexpected token tINTEGER')
+      end
+    end
+  end
+
+  describe '--display-only-correctable' do
+    it 'returns 0 if there are no offenses shown' do
+      create_file('.rubocop.yml', <<~YAML)
+        AllCops:
+          SuggestExtensions: false
+      YAML
+      create_file('example.rb', <<~RUBY)
+        # frozen_string_literal: true
+
+        @@var = 0
+      RUBY
+      expect(cli.run(['--display-only-correctable', 'example.rb'])).to eq(0)
+      expect($stderr.string).to eq('')
+      expect($stdout.string).to eq(<<~RESULT)
+        Inspecting 1 file
+        .
+
+        1 file inspected, no offenses detected
+      RESULT
+    end
+  end
+
+  describe '--display-only-safe-correctable' do
+    it 'returns 0 if there are no offenses shown' do
+      create_file('.rubocop.yml', <<~YAML)
+        AllCops:
+          SuggestExtensions: false
+      YAML
+      create_file('example.rb', <<~RUBY)
+        # frozen_string_literal: true
+
+        if foo and bar
+        end
+      RUBY
+      expect(cli.run(['--display-only-safe-correctable', 'example.rb'])).to eq(0)
+      expect($stderr.string).to eq('')
+      expect($stdout.string).to eq(<<~RESULT)
+        Inspecting 1 file
+        .
+
+        1 file inspected, no offenses detected
+      RESULT
     end
   end
 
@@ -1980,19 +2274,19 @@ RSpec.describe RuboCop::CLI, :isolated_environment do
 
       it 'does not create profile files by default' do
         expect(cli.run(['example1.rb'])).to eq(0)
-        expect($stdout.string.include?('Profile report generated')).to be(false)
+        expect($stdout.string).not_to include('Profile report generated')
         expect(File).not_to exist(cpu_profile)
       end
 
       it 'creates cpu profile file' do
         expect(cli.run(['--profile', 'example1.rb'])).to eq(0)
-        expect($stdout.string.include?('Profile report generated')).to be(true)
+        expect($stdout.string).to include('Profile report generated')
         expect(File).to exist(cpu_profile)
       end
 
       it 'creates memory profile file' do
         expect(cli.run(['--profile', '--memory', 'example1.rb'])).to eq(0)
-        expect($stdout.string.include?('Building memory report...')).to be(true)
+        expect($stdout.string).to include('Building memory report...')
         expect(File).to exist(memory_profile)
       end
     end

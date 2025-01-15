@@ -8,13 +8,9 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   "result is #{}"
       #
-      # @example
-      #
       #   # good
-      #
       #   "result is #{some_result}"
       class EmptyInterpolation < Base
         include Interpolation
@@ -25,7 +21,7 @@ module RuboCop
         def on_interpolation(begin_node)
           return unless begin_node.children.empty?
 
-          add_offense(begin_node) { |corrector| corrector.remove(begin_node.loc.expression) }
+          add_offense(begin_node) { |corrector| corrector.remove(begin_node) }
         end
       end
     end

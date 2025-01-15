@@ -9,7 +9,7 @@ module RuboCop
           extend NodePattern::Macros
           include Util
 
-          FOLDABLE_TYPES = %i[array hash heredoc send csend].freeze
+          FOLDABLE_TYPES = %i[array hash heredoc method_call].freeze
           CLASSLIKE_TYPES = %i[class module].freeze
           private_constant :FOLDABLE_TYPES, :CLASSLIKE_TYPES
 
@@ -43,16 +43,16 @@ module RuboCop
             types.map do |type|
               case type
               when :array
-                ->(node) { node.array_type? }
+                lambda(&:array_type?)
               when :hash
-                ->(node) { node.hash_type? }
+                lambda(&:hash_type?)
               when :heredoc
                 ->(node) { heredoc_node?(node) }
               when :method_call
-                ->(node) { node.call_type? }
+                lambda(&:call_type?)
               else
-                raise ArgumentError, "Unknown foldable type: #{type.inspect}. " \
-                                     "Valid foldable types are: #{FOLDABLE_TYPES.join(', ')}."
+                raise Warning, "Unknown foldable type: #{type.inspect}. " \
+                               "Valid foldable types are: #{FOLDABLE_TYPES.join(', ')}."
               end
             end
           end
@@ -63,7 +63,7 @@ module RuboCop
             types
           end
 
-          def code_length(node)
+          def code_length(node) # rubocop:disable Metrics/MethodLength
             if classlike_node?(node)
               classlike_code_length(node)
             elsif heredoc_node?(node)
@@ -72,7 +72,14 @@ module RuboCop
               body = extract_body(node)
               return 0 unless body
 
-              body.source.each_line.count { |line| !irrelevant_line?(line) }
+              source =
+                if node_with_heredoc?(body)
+                  source_from_node_with_heredoc(body)
+                else
+                  body.source.lines
+                end
+
+              source.count { |line| !irrelevant_line?(line) }
             end
           end
 
@@ -138,11 +145,10 @@ module RuboCop
 
           def extract_body(node)
             case node.type
-            when :class, :module, :block, :numblock, :def, :defs
+            when :class, :module, :sclass, :block, :numblock, :def, :defs
               node.body
             when :casgn
-              _scope, _name, value = *node
-              extract_body(value)
+              extract_body(node.expression)
             else
               node
             end
@@ -163,8 +169,8 @@ module RuboCop
             return 0 unless parenthesized?(parent)
 
             [
-              parent.loc.begin.end_pos != descendant.loc.expression.begin_pos,
-              parent.loc.end.begin_pos != descendant.loc.expression.end_pos
+              parent.loc.begin.end_pos != descendant.source_range.begin_pos,
+              parent.loc.end.begin_pos != descendant.source_range.end_pos
             ].count(true)
           end
 
@@ -174,6 +180,27 @@ module RuboCop
 
           def another_args?(node)
             node.call_type? && node.arguments.count > 1
+          end
+
+          def node_with_heredoc?(node)
+            node.each_descendant(:str, :dstr).any? { |descendant| heredoc_node?(descendant) }
+          end
+
+          def source_from_node_with_heredoc(node)
+            last_line = -1
+            node.each_descendant do |descendant|
+              next unless descendant.source
+
+              descendant_last_line =
+                if heredoc_node?(descendant)
+                  descendant.loc.heredoc_end.line
+                else
+                  descendant.last_line
+                end
+
+              last_line = [last_line, descendant_last_line].max
+            end
+            @processed_source[(node.first_line - 1)..(last_line - 1)]
           end
         end
       end

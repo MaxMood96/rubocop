@@ -2,7 +2,7 @@
 
 RSpec.describe RuboCop::Cop::Lint::UnifiedInteger, :config do
   shared_examples 'registers an offense' do |klass|
-    context 'target ruby version < 2.4', :ruby23 do
+    context 'target ruby version < 2.4', :ruby23, unsupported_on: :prism do
       context "when #{klass}" do
         context 'without any decorations' do
           it 'registers an offense and autocorrects' do
@@ -16,8 +16,6 @@ RSpec.describe RuboCop::Cop::Lint::UnifiedInteger, :config do
         end
 
         context 'when explicitly specified as toplevel constant' do
-          let(:source) { "1.is_a?(::#{klass})" }
-
           it 'registers an offense' do
             expect_offense(<<~RUBY, klass: klass)
               1.is_a?(::%{klass})

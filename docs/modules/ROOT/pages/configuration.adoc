@@ -29,10 +29,12 @@ RuboCop will start looking for the configuration file in the directory
 where the inspected file is and continue its way up to the root directory.
 
 If it cannot be found until reaching the project's root directory, then it will
-be searched for in the user's global config locations, which consists of a
+be searched for in the https://dot-config.github.io[.config directory of the project root]
+and the user's global config locations. The user's global config locations consist of a
 dotfile or a config file inside the https://specifications.freedesktop.org/basedir-spec/latest/index.html[XDG Base Directory
 specification].
 
+* `.config/.rubocop.yml` or `.config/rubocop/config.yml` at the project root
 * `~/.rubocop.yml`
 * `$XDG_CONFIG_HOME/rubocop/config.yml` (expands to `~/.config/rubocop/config.yml`
 if `$XDG_CONFIG_HOME` is not set)
@@ -46,7 +48,8 @@ files:
 * `/path/to/project/lib/utils/.rubocop.yml`
 * `/path/to/project/lib/.rubocop.yml`
 * `/path/to/project/.rubocop.yml`
-* `/.rubocop.yml`
+* `/path/to/project/.config/.rubocop.yml`
+* `/path/to/project/.config/rubocop/config.yml`
 * `~/.rubocop.yml`
 * `~/.config/rubocop/config.yml`
 * https://github.com/rubocop/rubocop/blob/master/config/default.yml[RuboCop's default configuration]
@@ -483,8 +486,8 @@ are disabled by default.
 
 The cop enabling process can be altered by setting `DisabledByDefault` or
 `EnabledByDefault` (but not both) to `true`. These settings override the default for *all*
-cops to disabled or enabled, regardless of the cops' default values (whether enabled,
-disabled or pending).
+cops to disabled or enabled, except `Lint/Syntax` which is always enabled,
+regardless of the cops' default values (whether enabled, disabled or pending).
 
 [source,yaml]
 ----
@@ -492,7 +495,7 @@ AllCops:
   DisabledByDefault: true
 ----
 
-All cops are then disabled by default. Only cops appearing in user
+All cops except `Lint/Syntax` are then disabled by default. Only cops appearing in user
 configuration files with `Enabled: true` will be enabled; every other cop will
 be disabled without having to explicitly disable them in configuration. It is
 also possible to enable entire departments by adding for example
@@ -503,7 +506,9 @@ Style:
   Enabled: true
 ----
 
-All cops in the `Style` department are then enabled.
+All cops in the `Style` department are then enabled. In this case, only the cops
+in the `Style` department that are enabled by default will be enabled.
+The cops in the `Style` department that are disabled by default will remain disabled.
 
 If a department is disabled, cops in that department can still be individually
 enabled, and that setting overrides the setting for its department in the same
@@ -567,13 +572,50 @@ These details will only be seen when RuboCop is run with the `--extra-details` f
 
 === AutoCorrect
 
-Cops that support the `--autocorrect` option can have that support
-disabled. For example:
+Cops that support the `--autocorrect` option offer flexible settings for autocorrection.
+These settings can be specified in the configuration file as follows:
+
+- `always`
+- `contextual`
+- `disabled`
+
+==== `always (Default)`
+
+This setting enables autocorrection always by default. For backward compatibility, `true` is treated the same as `always`.
 
 [source,yaml]
 ----
 Style/PerlBackrefs:
-  AutoCorrect: false
+  AutoCorrect: always # or true
+----
+
+==== `contextual`
+
+This setting enables autocorrection when launched from the `rubocop` command, but it is not available through LSP.
+e.g., `rubocop --lsp`, `rubocop --editor-mode`, or a program where `RuboCop::LSP.enable` has been applied.
+
+Inspections via the command line are treated as code that has been finalized.
+
+[source,yaml]
+----
+Style/PerlBackrefs:
+  AutoCorrect: contextual
+----
+
+This setting prevents autocorrection during editing in the editor. e.g, with `textDocument/formatting` LSP method.
+However `workspace/executeCommand` LSP method, which is triggered by intentional user actions, respects the user's intention for autocorrection.
+
+Additionally, for cases like `Metrics` cops where the highlight range extends over the entire body of classes, modules, methods, or blocks
+offending range will be confined to only name. This approach helps to avoid redundant and noisy offenses in editor display.
+
+==== `disabled`
+
+This setting disables autocorrection. For backward compatibility, `false` is treated the same as `disabled`.
+
+[source,yaml]
+----
+Style/PerlBackrefs:
+  AutoCorrect: disabled # or false
 ----
 
 == Common configuration parameters
@@ -608,11 +650,92 @@ AllCops:
   TargetRubyVersion: 2.5
 ----
 
-Otherwise, RuboCop will then check your project for a series of files where
-the version may be specified already. The files that will be looked for are
-`.ruby-version`, `.tool-versions`, `Gemfile.lock`, and `*.gemspec`.
-If Gemspec file has an array for `required_ruby_version`, the lowest version will be used.
-If none of the files are found a default version value will be used.
+NOTE: When `ParserEngine: parser_prism` is specified, `TargetRubyVersion` must
+be set to `3.3` or higher.
+
+If a `TargetRubyVersion` is not specified in your config, then RuboCop will
+check your project for a series of other files where the Ruby version may be
+specified already. The files that will be checked are (in this order):
+`*.gemspec`, `.ruby-version`, `.tool-versions`, and `Gemfile.lock`.
+
+The target ruby version may also be specified by setting the
+`RUBOCOP_TARGET_RUBY_VERSION` environment variable to the desired version: for
+example, running `RUBOCOP_TARGET_RUBY_VERSION=3.3 rubocop` will
+run rubocop with a target ruby version of 3.3. Using this environment variable
+will override all other sources of version information, including
+`.rubocop.yml`.
+
+If a target Ruby version cannot be found via any of the above sources, then a
+default target Ruby version will be used.
+
+=== Finding target Ruby in a `*.gemspec` file
+
+In order for RuboCop to parse a `*.gemspec` file's `required_ruby_version`, the
+Ruby version must be specified using one of these syntaxes:
+
+1. a string range, e.g. `'~> 3.2.0'` or `'>= 3.2.2'`
+2. an array of strings, e.g. `['>= 3.0.0', '< 3.4.0']`
+3. a `Gem::Requirement`, e.g. `Gem::Requirement.new('>= 3.1.2')`
+
+If a `*.gemspec` file specifies a range of supported Ruby versions via any of
+these means, then the greater of the following Ruby versions will be used:
+
+- the lowest Ruby version that is compatible with your specified range
+- the lowest version of Ruby that is still supported by your version of RuboCop
+
+If a `*.gemspec` file defines its `required_ruby_version` dynamically (e.g. by
+reading from a `.ruby-version` file, via an environment variable, referencing a
+constant or local variable, etc), then RuboCop will _not_ detect that Ruby
+version, and will instead try to find a target Ruby version elsewhere.
+
+== Setting the parser engine
+
+NOTE: The parser engine configuration was introduced in RuboCop 1.62. This
+experimental feature has been under consideration for a while.
+
+RuboCop allows switching the backend parser by specifying either
+`parser_whitequark` or `parser_prism` as the value for the `ParserEngine`.
+
+Here are the parsers used as backends for each value:
+
+- `ParserEngine: parser_whitequark` ... https://github.com/whitequark/parser
+- `ParserEngine: parser_prism` ... https://github.com/ruby/prism (`Prism::Translation::Parser`)
+
+By default, `parser_whitequark` is implicitly used.
+
+`parser_whitequark` can analyze source code from Ruby 2.0 and above:
+
+[source,yaml]
+----
+AllCops:
+  ParserEngine: parser_whitequark
+----
+
+`parser_prism` can analyze source code from Ruby 3.3 and above:
+
+[source,yaml]
+----
+AllCops:
+  ParserEngine: parser_prism
+  TargetRubyVersion: 3.3
+----
+
+`parser_prism` tends to perform analysis faster than `parser_whitequark`.
+
+IMPORTANT: Since the support for Prism is experimental, it is not included in
+RuboCop's runtime dependencies.  If running RuboCop through Bundler, please add
+`gem 'prism'` to your `Gemfile`:
+
+[source,ruby]
+----
+gem 'prism'
+----
+
+There are some incompatibilities with `parser_whitequark` in `parser_prism`,
+which is the main reason why the support for it is considered experimental.
+We're working with Prism's team to address those.  You can track the outstanding
+known issues in Prism that affect RuboCop
+https://github.com/ruby/prism/issues?q=is%3Aissue+is%3Aopen+label%3Arubocop[here].
 
 == Automatically Generated Configuration
 
@@ -861,6 +984,41 @@ Rails:
   DocumentationBaseURL: https://docs.rubocop.org/rubocop-rails
 ----
 
+By default, documentation is expected to be served as HTML but if you prefer
+to use something else like markdown you can set `DocumentationExtension`.
+
+With markdown as the documentation format you are able to host it directly through
+GitHub without having to own a domain or using GitHub Pages. The `rubocop-sorbet`
+extension is an example of this, its docs are available
+https://github.com/Shopify/rubocop-sorbet/blob/main/manual[here].
+
+[source,yaml]
+----
+Sorbet:
+  DocumentationBaseURL: https://github.com/Shopify/rubocop-sorbet/blob/main/manual
+  DocumentationExtension: .md
+----
+
+== Setting the version tracking metadata for cops
+
+This configuration is particularly useful when custom cops are distributed as a gem.
+
+Each cop can have the following additional metadata:
+
+* `VersionAdded` - the RuboCop version in which it was added
+* `VersionChanged` (optional) - the latest RuboCop version in which it was changed in a user-impacting way (new config, updated defaults, etc)
+
+[source,yaml]
+----
+Style/HashSyntax:
+  VersionAdded: '0.9'
+  VersionChanged: '1.67'
+----
+
+NOTE: These values do not include patch versions.
+
+Those will be pretty useful for the documentation (so the manual generation has to be enhanced to include them) and keeping track of changes.
+
 == Enable checking Active Support extensions
 
 Some cops for checking specified methods (e.g. `Style/HashExcept`) supports Active Support extensions.
@@ -870,4 +1028,19 @@ This is off by default, but can be enabled by the `ActiveSupportExtensionsEnable
 ----
 AllCops:
   ActiveSupportExtensionsEnabled: true
+----
+
+== Opting into globally frozen string literals
+
+Ruby continues to move into the direction of having all string literals frozen by default.
+Ruby 3.4 for example will show a warning if a non-frozen string literal from a file without
+the frozen string literal magic comment gets modified. By starting ruby with the environment
+variable `RUBYOPT` set to `--enable=frozen-string-literal` you can opt into that behaviour today.
+For RuboCop to provide accurate analysis you must also configure the `StringLiteralsFrozenByDefault`
+option.
+
+[source,yaml]
+----
+AllCops:
+  StringLiteralsFrozenByDefault: true
 ----

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'pathname'
-
 # FIXME: Moving Rails department code to RuboCop Rails will remove
 # the following rubocop:disable comment.
 # rubocop:disable Metrics/ClassLength
@@ -14,10 +12,11 @@ module RuboCop
   class Config
     include PathUtil
     include FileFinder
-    extend Forwardable
+    extend SimpleForwardable
 
     CopConfig = Struct.new(:name, :metadata)
 
+    EMPTY_CONFIG = {}.freeze
     DEFAULT_RAILS_VERSION = 5.0
     attr_reader :loaded_path
 
@@ -29,7 +28,7 @@ module RuboCop
     end
 
     # rubocop:disable Metrics/AbcSize
-    def initialize(hash = {}, loaded_path = nil)
+    def initialize(hash = RuboCop::ConfigLoader.default_configuration, loaded_path = nil)
       @loaded_path = loaded_path
       @for_cop = Hash.new do |h, cop|
         cop_name = cop.respond_to?(:cop_name) ? cop.cop_name : cop
@@ -82,10 +81,7 @@ module RuboCop
 
     def make_excludes_absolute
       each_key do |key|
-        @validator.validate_section_presence(key)
-        next unless self[key]['Exclude']
-
-        self[key]['Exclude'].map! do |exclude_elem|
+        dig(key, 'Exclude')&.map! do |exclude_elem|
           if exclude_elem.is_a?(String) && !absolute?(exclude_elem)
             File.expand_path(File.join(base_dir_for_path_parameters, exclude_elem))
           else
@@ -125,6 +121,13 @@ module RuboCop
       @for_cop[cop]
     end
 
+    # @return [Config, Hash] for the given cop / cop name.
+    # If the given cop is enabled, returns its configuration hash.
+    # Otherwise, returns an empty hash.
+    def for_enabled_cop(cop)
+      cop_enabled?(cop) ? for_cop(cop) : EMPTY_CONFIG
+    end
+
     # @return [Config] for the given cop merged with that of its department (if any)
     # Note: the 'Enabled' attribute is same as that returned by `for_cop`
     def for_badge(badge)
@@ -161,6 +164,10 @@ module RuboCop
       @for_all_cops ||= self['AllCops'] || {}
     end
 
+    def cop_enabled?(name)
+      !!for_cop(name)['Enabled']
+    end
+
     def disabled_new_cops?
       for_all_cops['NewCops'] == 'disable'
     end
@@ -171,6 +178,10 @@ module RuboCop
 
     def active_support_extensions_enabled?
       for_all_cops['ActiveSupportExtensionsEnabled']
+    end
+
+    def string_literals_frozen_by_default?
+      for_all_cops['StringLiteralsFrozenByDefault']
     end
 
     def file_to_include?(file)
@@ -246,6 +257,10 @@ module RuboCop
         end
     end
 
+    def parser_engine
+      @parser_engine ||= for_all_cops.fetch('ParserEngine', :parser_whitequark).to_sym
+    end
+
     def target_rails_version
       @target_rails_version ||=
         if for_all_cops['TargetRailsVersion']
@@ -261,6 +276,7 @@ module RuboCop
       PathUtil.smart_path(@loaded_path)
     end
 
+    # @return [String, nil]
     def bundler_lock_file_path
       return nil unless loaded_path
 
@@ -284,28 +300,53 @@ module RuboCop
       end
     end
 
+    # Returns target's locked gem versions (i.e. from Gemfile.lock or gems.locked)
+    # @returns [Hash{String => Gem::Version}] The locked gem versions, keyed by the gems' names.
+    def gem_versions_in_target
+      @gem_versions_in_target ||= read_gem_versions_from_target_lockfile
+    end
+
+    def inspect # :nodoc:
+      "#<#{self.class.name}:#{object_id} @loaded_path=#{loaded_path}>"
+    end
+
     private
 
+    # @return [Float, nil] The Rails version as a `major.minor` Float.
     def target_rails_version_from_bundler_lock_file
       @target_rails_version_from_bundler_lock_file ||= read_rails_version_from_bundler_lock_file
     end
 
+    # @return [Float, nil] The Rails version as a `major.minor` Float.
     def read_rails_version_from_bundler_lock_file
-      lock_file_path = bundler_lock_file_path
-      return nil unless lock_file_path
+      return nil unless gem_versions_in_target
 
-      File.foreach(lock_file_path) do |line|
-        # If Rails (or one of its frameworks) is in Gemfile.lock or gems.lock, there should be
-        # a line like:
-        #         railties (X.X.X)
-        result = line.match(/^\s+railties\s+\((\d+\.\d+)/)
-        return result.captures.first.to_f if result
-      end
+      # Look for `railties` instead of `rails`, to support apps that only use a subset of `rails`
+      # See https://github.com/rubocop/rubocop/pull/11289
+      rails_version_in_target = gem_versions_in_target['railties']
+      return nil unless rails_version_in_target
+
+      gem_version_to_major_minor_float(rails_version_in_target)
+    end
+
+    # @param [Gem::Version] gem_version an object like `Gem::Version.new("7.1.2.3")`
+    # @return [Float] The major and minor version, like `7.1`
+    def gem_version_to_major_minor_float(gem_version)
+      segments = gem_version.segments
+      Float("#{segments[0]}.#{segments[1]}")
+    end
+
+    # @returns [Hash{String => Gem::Version}] The locked gem versions, keyed by the gems' names.
+    def read_gem_versions_from_target_lockfile
+      lockfile_path = bundler_lock_file_path
+      return nil unless lockfile_path
+
+      Lockfile.new(lockfile_path).gem_versions
     end
 
     def enable_cop?(qualified_cop_name, cop_options)
-      # If the cop is explicitly enabled, the other checks can be skipped.
-      return true if cop_options['Enabled'] == true
+      # If the cop is explicitly enabled or `Lint/Syntax`, the other checks can be skipped.
+      return true if cop_options['Enabled'] == true || qualified_cop_name == 'Lint/Syntax'
 
       department = department_of(qualified_cop_name)
       cop_enabled = cop_options.fetch('Enabled') { !for_all_cops['DisabledByDefault'] }

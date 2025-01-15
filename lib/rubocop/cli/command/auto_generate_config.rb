@@ -10,12 +10,17 @@ module RuboCop
 
         AUTO_GENERATED_FILE = '.rubocop_todo.yml'
         YAML_OPTIONAL_DOC_START = /\A---(\s+#|\s*\z)/.freeze
+        PLACEHOLDER = '###rubocop:inherit_here'
 
         PHASE_1 = 'Phase 1 of 2: run Layout/LineLength cop'
         PHASE_2 = 'Phase 2 of 2: run all cops'
 
         PHASE_1_OVERRIDDEN = '(skipped because the default Layout/LineLength:Max is overridden)'
         PHASE_1_DISABLED = '(skipped because Layout/LineLength is disabled)'
+        PHASE_1_SKIPPED_ONLY_COPS =
+          '(skipped because a list of cops is passed to the `--only` flag)'
+        PHASE_1_SKIPPED_ONLY_EXCLUDE =
+          '(skipped because only excludes will be generated due to `--auto-gen-only-exclude` flag)'
 
         def run
           add_formatter
@@ -27,10 +32,14 @@ module RuboCop
         private
 
         def maybe_run_line_length_cop
-          if !line_length_enabled?(@config_store.for_pwd)
+          if only_exclude?
+            skip_line_length_cop(PHASE_1_SKIPPED_ONLY_EXCLUDE)
+          elsif !line_length_enabled?(@config_store.for_pwd)
             skip_line_length_cop(PHASE_1_DISABLED)
           elsif !same_max_line_length?(@config_store.for_pwd, ConfigLoader.default_configuration)
             skip_line_length_cop(PHASE_1_OVERRIDDEN)
+          elsif options_has_only_flag?
+            skip_line_length_cop(PHASE_1_SKIPPED_ONLY_COPS)
           else
             run_line_length_cop
           end
@@ -55,6 +64,14 @@ module RuboCop
 
         def line_length_cop(config)
           config.for_cop('Layout/LineLength')
+        end
+
+        def options_has_only_flag?
+          @options[:only]
+        end
+
+        def only_exclude?
+          @options[:auto_gen_only_exclude]
         end
 
         # Do an initial run with only Layout/LineLength so that cops that
@@ -118,28 +135,31 @@ module RuboCop
 
         def existing_configuration(config_file)
           File.read(config_file, encoding: Encoding::UTF_8)
-              .sub(/^inherit_from: *[^\n]+/, '')
-              .sub(/^inherit_from: *(\n *- *[^\n]+)+/, '')
+              .sub(/^inherit_from: *[^\n]+/, PLACEHOLDER)
+              .sub(/^inherit_from: *(\n *- *[^\n]+)+/, PLACEHOLDER)
         end
 
         def write_config_file(file_name, file_string, rubocop_yml_contents)
           lines = /\S/.match?(rubocop_yml_contents) ? rubocop_yml_contents.split("\n", -1) : []
-          doc_start_index = lines.index { |line| YAML_OPTIONAL_DOC_START.match?(line) } || -1
-          lines.insert(doc_start_index + 1, "inherit_from:#{file_string}\n")
-          File.write(file_name, lines.join("\n"))
+          unless rubocop_yml_contents&.include?(PLACEHOLDER)
+            doc_start_index = lines.index { |line| YAML_OPTIONAL_DOC_START.match?(line) } || -1
+            lines.insert(doc_start_index + 1, PLACEHOLDER)
+          end
+          File.write(file_name, lines.join("\n")
+                                     .sub(/#{PLACEHOLDER}\n*/o, "inherit_from:#{file_string}\n\n")
+                                     .sub(/\n\n+\Z/, "\n"))
         end
 
         def relative_path_to_todo_from_options_config
-          return AUTO_GENERATED_FILE if !@options[:config] || options_config_in_root?
+          return AUTO_GENERATED_FILE unless @options[:config]
 
-          base = Pathname.new('.')
-          config_dir = Pathname.new(File.dirname(@options[:config]))
+          base = Pathname.new(Dir.pwd)
+          config_dir = Pathname.new(@options[:config]).realpath.dirname
+
+          # Don't have the path start with `/`
+          return AUTO_GENERATED_FILE if config_dir == base
 
           "#{base.relative_path_from(config_dir)}/#{AUTO_GENERATED_FILE}"
-        end
-
-        def options_config_in_root?
-          File.dirname(@options[:config]) == '.'
         end
       end
     end

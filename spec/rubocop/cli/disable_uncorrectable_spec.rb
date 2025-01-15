@@ -6,7 +6,8 @@ RSpec.describe 'RuboCop::CLI --disable-uncorrectable', :isolated_environment do 
   include_context 'cli spec behavior'
 
   describe '--disable-uncorrectable' do
-    let(:exit_code) { cli.run(%w[--autocorrect-all --format simple --disable-uncorrectable]) }
+    let(:cli_opts) { %w[--autocorrect-all --format simple --disable-uncorrectable] }
+    let(:exit_code) { cli.run(cli_opts) }
 
     let(:setup_long_line) do
       create_file('.rubocop.yml', <<~YAML)
@@ -257,6 +258,309 @@ RSpec.describe 'RuboCop::CLI --disable-uncorrectable', :isolated_environment do 
               puts(script)
             end
           RUBY
+        end
+      end
+
+      context 'and the offense is inside a percent array' do
+        before do
+          create_file('.rubocop.yml', <<~YAML)
+            Layout/LineLength:
+              Max: 30
+          YAML
+        end
+
+        it 'adds before-and-after disable statement around the percent array' do
+          create_file('example.rb', <<~RUBY)
+            # frozen_string_literal: true
+
+            ARRAY = %i[AAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB].freeze
+          RUBY
+          expect(exit_code).to eq(0)
+          expect(File.read('example.rb')).to eq(<<~RUBY)
+            # frozen_string_literal: true
+
+            # rubocop:todo Layout/LineLength
+            ARRAY = %i[
+              AAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB
+            ].freeze
+            # rubocop:enable Layout/LineLength
+          RUBY
+        end
+
+        it 'adds before-and-after disable statement around the multi-line percent array' do
+          create_file('example.rb', <<~RUBY)
+            # frozen_string_literal: true
+
+            ARRAY = %i[
+              AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+              AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+            ].freeze
+          RUBY
+          expect(exit_code).to eq(0)
+          expect(File.read('example.rb')).to eq(<<~RUBY)
+            # frozen_string_literal: true
+
+            # rubocop:todo Layout/LineLength
+            ARRAY = %i[
+              AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+              AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+            ].freeze
+            # rubocop:enable Layout/LineLength
+          RUBY
+        end
+      end
+
+      context 'and the offense is outside a percent array' do
+        it 'adds a single one-line disable statement' do
+          create_file('.rubocop.yml', <<~YAML)
+            Metrics/MethodLength:
+              Max: 2
+          YAML
+          create_file('example.rb', <<~RUBY)
+            def foo
+              bar do
+                %w[]
+              end
+            end
+          RUBY
+          expect(exit_code).to eq(0)
+          expect($stderr.string).to eq('')
+          expect($stdout.string).to eq(<<~OUTPUT)
+            == example.rb ==
+            C:  1:  1: [Todo] Metrics/MethodLength: Method has too many lines. [3/2]
+            C:  1:  1: [Corrected] Style/FrozenStringLiteralComment: Missing frozen string literal comment.
+            C:  2:  1: [Corrected] Layout/EmptyLineAfterMagicComment: Add an empty line after magic comments.
+
+            1 file inspected, 3 offenses detected, 3 offenses corrected
+          OUTPUT
+          expect(File.read('example.rb')).to eq(<<~RUBY)
+            # frozen_string_literal: true
+
+            def foo # rubocop:todo Metrics/MethodLength
+              bar do
+                %w[]
+              end
+            end
+          RUBY
+        end
+      end
+
+      context 'and the offense is on a line containing a string continuation' do
+        it 'adds before-and-after disable statement around the string continuation' do
+          create_file('.rubocop.yml', <<~YAML)
+            AllCops:
+              DisabledByDefault: true
+            Lint/DuplicateHashKey:
+              Enabled: true
+          YAML
+          create_file('example.rb', <<~'RUBY')
+            {
+              key1: 'something',
+              key1: 'whatever'\
+                'something else'
+            }
+          RUBY
+          expect(exit_code).to eq(0)
+          expect(File.read('example.rb')).to eq(<<~'RUBY')
+            {
+              key1: 'something',
+              # rubocop:todo Lint/DuplicateHashKey
+              key1: 'whatever'\
+                'something else'
+              # rubocop:enable Lint/DuplicateHashKey
+            }
+          RUBY
+        end
+      end
+
+      context 'and the offense is on a different line than a string continuation' do
+        it 'adds a single one-line disable statement' do
+          create_file('.rubocop.yml', <<~YAML)
+            AllCops:
+              DisabledByDefault: true
+            Lint/DuplicateHashKey:
+              Enabled: true
+          YAML
+          create_file('example.rb', <<~'RUBY')
+            x = 'something'\
+              'something else'
+            {
+              key1: 'foo',
+              key1: 'bar'
+            }
+          RUBY
+          expect(exit_code).to eq(0)
+          expect(File.read('example.rb')).to eq(<<~'RUBY')
+            x = 'something'\
+              'something else'
+            {
+              key1: 'foo',
+              key1: 'bar' # rubocop:todo Lint/DuplicateHashKey
+            }
+          RUBY
+        end
+      end
+
+      context 'and the offense is within a single-line string' do
+        before do
+          create_file('.rubocop.yml', <<~YAML)
+            Layout/LineLength:
+              Max: 40
+          YAML
+        end
+
+        it 'adds before-and-after disable statements' do
+          create_file('example.rb', <<~RUBY)
+            # frozen_string_literal: true
+
+            'the quick brown fox jumps over the lazy dog.'
+          RUBY
+          expect(exit_code).to eq(0)
+          expect($stderr.string).to eq('')
+          expect($stdout.string).to eq(<<~OUTPUT)
+            == example.rb ==
+            C:  3: 41: [Todo] Layout/LineLength: Line is too long. [46/40]
+
+            1 file inspected, 1 offense detected, 1 offense corrected
+          OUTPUT
+          expect(File.read('example.rb')).to eq(<<~RUBY)
+            # frozen_string_literal: true
+
+            # rubocop:todo Layout/LineLength
+            'the quick brown fox jumps over the lazy dog.'
+            # rubocop:enable Layout/LineLength
+          RUBY
+        end
+      end
+
+      context 'and the offense is within a multi-line string' do
+        before do
+          create_file('.rubocop.yml', <<~YAML)
+            Layout/LineLength:
+              Max: 40
+          YAML
+        end
+
+        context 'with quotes' do
+          it 'adds before-and-after disable statements' do
+            create_file('example.rb', <<~RUBY)
+              # frozen_string_literal: true
+
+              "
+                the quick brown fox jumps over the lazy dog.
+              "
+            RUBY
+            expect(exit_code).to eq(0)
+            expect($stderr.string).to eq('')
+            expect($stdout.string).to eq(<<~OUTPUT)
+              == example.rb ==
+              C:  4: 41: [Todo] Layout/LineLength: Line is too long. [46/40]
+
+              1 file inspected, 1 offense detected, 1 offense corrected
+            OUTPUT
+            expect(File.read('example.rb')).to eq(<<~RUBY)
+              # frozen_string_literal: true
+
+              # rubocop:todo Layout/LineLength
+              "
+                the quick brown fox jumps over the lazy dog.
+              "
+              # rubocop:enable Layout/LineLength
+            RUBY
+          end
+        end
+
+        context 'with %()' do
+          it 'adds before-and-after disable statements' do
+            create_file('example.rb', <<~RUBY)
+              # frozen_string_literal: true
+
+              %(
+                the quick brown fox jumps over the lazy dog.
+              )
+            RUBY
+            expect(exit_code).to eq(0)
+            expect($stderr.string).to eq('')
+            expect($stdout.string).to eq(<<~OUTPUT)
+              == example.rb ==
+              C:  4: 41: [Todo] Layout/LineLength: Line is too long. [46/40]
+
+              1 file inspected, 1 offense detected, 1 offense corrected
+            OUTPUT
+            expect(File.read('example.rb')).to eq(<<~RUBY)
+              # frozen_string_literal: true
+
+              # rubocop:todo Layout/LineLength
+              %(
+                the quick brown fox jumps over the lazy dog.
+              )
+              # rubocop:enable Layout/LineLength
+            RUBY
+          end
+        end
+
+        context 'with %q()' do
+          let(:cli_opts) { super().push('--except', 'Style/RedundantPercentQ') }
+
+          it 'adds before-and-after disable statements' do
+            create_file('example.rb', <<~RUBY)
+              # frozen_string_literal: true
+
+              %q(
+                the quick brown fox jumps over the lazy dog.
+              )
+            RUBY
+            expect(exit_code).to eq(0)
+            expect($stderr.string).to eq('')
+            expect($stdout.string).to eq(<<~OUTPUT)
+              == example.rb ==
+              C:  4: 41: [Todo] Layout/LineLength: Line is too long. [46/40]
+
+              1 file inspected, 1 offense detected, 1 offense corrected
+            OUTPUT
+            expect(File.read('example.rb')).to eq(<<~RUBY)
+              # frozen_string_literal: true
+
+              # rubocop:todo Layout/LineLength
+              %q(
+                the quick brown fox jumps over the lazy dog.
+              )
+              # rubocop:enable Layout/LineLength
+            RUBY
+          end
+        end
+
+        context 'with %Q()' do
+          let(:cli_opts) do
+            super().push('--except', 'Style/BarePercentLiterals,Style/RedundantPercentQ')
+          end
+
+          it 'adds before-and-after disable statements' do
+            create_file('example.rb', <<~RUBY)
+              # frozen_string_literal: true
+
+              %Q(
+                the quick brown fox jumps over the lazy dog.
+              )
+            RUBY
+            expect(exit_code).to eq(0)
+            expect($stderr.string).to eq('')
+            expect($stdout.string).to eq(<<~OUTPUT)
+              == example.rb ==
+              C:  4: 41: [Todo] Layout/LineLength: Line is too long. [46/40]
+
+              1 file inspected, 1 offense detected, 1 offense corrected
+            OUTPUT
+            expect(File.read('example.rb')).to eq(<<~RUBY)
+              # frozen_string_literal: true
+
+              # rubocop:todo Layout/LineLength
+              %Q(
+                the quick brown fox jumps over the lazy dog.
+              )
+              # rubocop:enable Layout/LineLength
+            RUBY
+          end
         end
       end
     end

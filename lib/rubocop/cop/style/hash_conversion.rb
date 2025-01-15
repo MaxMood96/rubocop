@@ -10,6 +10,16 @@ module RuboCop
       # `Hash[*ary]` can be replaced with `ary.each_slice(2).to_h` but it will be complicated.
       # So, `AllowSplatArgument` option is true by default to allow splat argument for simple code.
       #
+      # @safety
+      #   This cop's autocorrection is unsafe because `ArgumentError` occurs
+      #   if the number of elements is odd:
+      #
+      #   [source,ruby]
+      #   ----
+      #   Hash[[[1, 2], [3]]] #=> {1=>2, 3=>nil}
+      #   [[1, 2], [5]].to_h  #=> wrong array length at 1 (expected 2, was 1) (ArgumentError)
+      #   ----
+      #
       # @example
       #   # bad
       #   Hash[ary]
@@ -101,8 +111,7 @@ module RuboCop
         end
 
         def requires_parens?(node)
-          (node.call_type? && node.arguments.any? && !node.parenthesized?) ||
-            node.or_type? || node.and_type?
+          (node.call_type? && node.arguments.any? && !node.parenthesized?) || node.operator_keyword?
         end
 
         def multi_argument(node)

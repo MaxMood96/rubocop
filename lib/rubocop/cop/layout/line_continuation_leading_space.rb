@@ -51,31 +51,43 @@ module RuboCop
         private_constant :LINE_1_ENDING, :LINE_2_BEGINNING,
                          :LEADING_STYLE_OFFENSE, :TRAILING_STYLE_OFFENSE
 
-        # rubocop:disable Metrics/AbcSize
+        # When both cops are activated and run in the same iteration of the correction loop,
+        # `Style/StringLiterals` undoes the moving of spaces that
+        # `Layout/LineContinuationLeadingSpace` performs. This is because `Style/StringLiterals`
+        # takes the original string content and transforms it, rather than just modifying the
+        # delimiters, in order to handle escaping for quotes within the string.
+        def self.autocorrect_incompatible_with
+          [Style::StringLiterals]
+        end
+
         def on_dstr(node)
           # Quick check if we possibly have line continuations.
           return unless node.source.include?('\\')
 
-          end_of_first_line = node.loc.expression.begin_pos - node.loc.expression.column
+          end_of_first_line = node.source_range.begin_pos - node.source_range.column
 
-          raw_lines(node).each_cons(2) do |raw_line_one, raw_line_two|
+          lines = raw_lines(node)
+          lines.each_cons(2).with_index(node.first_line) do |(raw_line_one, raw_line_two), line_num|
             end_of_first_line += raw_line_one.length
 
-            next unless continuation?(raw_line_one)
+            next unless continuation?(raw_line_one, line_num, node)
 
-            if enforced_style_leading?
-              investigate_leading_style(raw_line_one, raw_line_two, end_of_first_line)
-            else
-              investigate_trailing_style(raw_line_one, raw_line_two, end_of_first_line)
-            end
+            investigate(raw_line_one, raw_line_two, end_of_first_line)
           end
         end
-        # rubocop:enable Metrics/AbcSize
 
         private
 
         def raw_lines(node)
           processed_source.raw_source.lines[node.first_line - 1, line_range(node).size]
+        end
+
+        def investigate(first_line, second_line, end_of_first_line)
+          if enforced_style_leading?
+            investigate_leading_style(first_line, second_line, end_of_first_line)
+          else
+            investigate_trailing_style(first_line, second_line, end_of_first_line)
+          end
         end
 
         def investigate_leading_style(first_line, second_line, end_of_first_line)
@@ -100,8 +112,11 @@ module RuboCop
           end
         end
 
-        def continuation?(line)
-          line.end_with?("\\\n")
+        def continuation?(line, line_num, node)
+          return false unless line.end_with?("\\\n")
+
+          # Ensure backslash isn't part of a token spanning to the next line.
+          node.children.none? { |c| (c.first_line...c.last_line).cover?(line_num) && c.multiline? }
         end
 
         def autocorrect(corrector, offense_range, insert_pos, spaces)
@@ -123,9 +138,9 @@ module RuboCop
 
         def message(_range)
           if enforced_style_leading?
-            'Move trailing spaces to the start of next line.'
+            'Move trailing spaces to the start of the next line.'
           else
-            'Move leading spaces to the end of previous line.'
+            'Move leading spaces to the end of the previous line.'
           end
         end
 

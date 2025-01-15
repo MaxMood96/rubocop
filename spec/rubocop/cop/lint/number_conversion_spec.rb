@@ -13,6 +13,17 @@ RSpec.describe RuboCop::Cop::Lint::NumberConversion, :config do
       RUBY
     end
 
+    it 'when using `&.to_i`' do
+      expect_offense(<<~RUBY)
+        "10"&.to_i
+        ^^^^^^^^^^ Replace unsafe number conversion with number class parsing, instead of using `"10".to_i`, use stricter `Integer("10", 10)`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        Integer("10", 10)
+      RUBY
+    end
+
     it 'when using `#to_f`' do
       expect_offense(<<~RUBY)
         "10.2".to_f
@@ -100,7 +111,7 @@ RSpec.describe RuboCop::Cop::Lint::NumberConversion, :config do
       RUBY
     end
 
-    it 'when `#to_i` called on a variable on a array' do
+    it 'when `#to_i` called on a variable on an array' do
       expect_offense(<<~RUBY)
         args = [1,2,3]
         args[0].to_i
@@ -169,6 +180,17 @@ RSpec.describe RuboCop::Cop::Lint::NumberConversion, :config do
       RUBY
     end
 
+    it 'registers offense and autocorrects when using safe navigation operator' do
+      expect_offense(<<~RUBY)
+        "1,2,3,foo,5,6,7,8".split(',')&.map(&:to_i)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Replace unsafe number conversion with number class parsing, instead of using `&:to_i`, use stricter `{ |i| Integer(i, 10) }`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        "1,2,3,foo,5,6,7,8".split(',')&.map { |i| Integer(i, 10) }
+      RUBY
+    end
+
     it 'registers offense and autocorrects without parentheses' do
       expect_offense(<<~RUBY)
         "1,2,3,foo,5,6,7,8".split(',').map &:to_i
@@ -191,6 +213,17 @@ RSpec.describe RuboCop::Cop::Lint::NumberConversion, :config do
       RUBY
     end
 
+    it 'registers offense with `&.try`' do
+      expect_offense(<<~RUBY)
+        "foo"&.try(:to_f)
+        ^^^^^^^^^^^^^^^^^ Replace unsafe number conversion with number class parsing, instead of using `:to_f`, use stricter `{ |i| Float(i) }`.
+      RUBY
+
+      expect_correction(<<~RUBY)
+        "foo"&.try { |i| Float(i) }
+      RUBY
+    end
+
     it 'registers an offense when using nested number conversion methods' do
       expect_offense(<<~RUBY)
         var.to_i.to_f
@@ -199,6 +232,28 @@ RSpec.describe RuboCop::Cop::Lint::NumberConversion, :config do
 
       expect_correction(<<~RUBY)
         Integer(var, 10).to_f
+      RUBY
+    end
+
+    it 'registers an offense when using multiple number conversion methods' do
+      expect_offense(<<~RUBY)
+        case foo.to_f
+             ^^^^^^^^ Replace unsafe number conversion with number class parsing, instead of using `foo.to_f`, use stricter `Float(foo)`.
+        ^^^^^^^^^^^^^ Replace unsafe number conversion with number class parsing, instead of using `case foo.to_f[...]
+        when 0.0
+          bar
+        else
+          baz
+        end.to_i
+      RUBY
+
+      expect_correction(<<~RUBY)
+        Integer(case foo.to_f
+        when 0.0
+          bar
+        else
+          baz
+        end, 10)
       RUBY
     end
 

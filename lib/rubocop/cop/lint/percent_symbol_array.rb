@@ -12,13 +12,9 @@ module RuboCop
       # @example
       #
       #   # bad
-      #
       #   %i(:foo, :bar)
       #
-      # @example
-      #
       #   # good
-      #
       #   %i(foo bar)
       class PercentSymbolArray < Base
         include PercentLiteral
@@ -41,7 +37,7 @@ module RuboCop
 
         def autocorrect(corrector, node)
           node.children.each do |child|
-            range = child.loc.expression
+            range = child.source_range
 
             corrector.remove_trailing(range, 1) if range.source.end_with?(',')
             corrector.remove_leading(range, 1) if

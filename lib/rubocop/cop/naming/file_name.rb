@@ -37,8 +37,6 @@ module RuboCop
       #
       #   anything/using_snake_case.rake
       class FileName < Base
-        include RangeHelp
-
         MSG_SNAKE_CASE = 'The name of this source file (`%<basename>s`) should use snake_case.'
         MSG_NO_DEFINITION = '`%<basename>s` should define a class or module called `%<namespace>s`.'
         MSG_REGEX = '`%<basename>s` should match `%<regex>s`.'
@@ -57,7 +55,7 @@ module RuboCop
           file_path = processed_source.file_path
           return if config.file_to_exclude?(file_path) || config.allowed_camel_case_file?(file_path)
 
-          for_bad_filename(file_path) { |range, msg| add_offense(range, message: msg) }
+          for_bad_filename(file_path)
         end
 
         private
@@ -71,7 +69,7 @@ module RuboCop
             msg = other_message(basename) unless bad_filename_allowed?
           end
 
-          yield source_range(processed_source.buffer, 1, 0), msg if msg
+          add_global_offense(msg) if msg
         end
 
         def perform_class_and_module_naming_checks(file_path, basename)
@@ -136,7 +134,7 @@ module RuboCop
         end
 
         def filename_good?(basename)
-          basename = basename.sub(/^\./, '')
+          basename = basename.delete_prefix('.')
           basename = basename.sub(/\.[^.]+$/, '')
           # special handling for Action Pack Variants file names like
           # some_file.xlsx+mobile.axlsx

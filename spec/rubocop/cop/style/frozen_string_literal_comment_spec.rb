@@ -274,6 +274,15 @@ RSpec.describe RuboCop::Cop::Style::FrozenStringLiteralComment, :config do
         puts 1
       RUBY
     end
+
+    %w[TRUE FALSE True False truE falsE].each do |value|
+      it "accepts a frozen string literal with `#{value}` literal" do
+        expect_no_offenses(<<~RUBY)
+          # frozen_string_literal: #{value}
+          puts 1
+        RUBY
+      end
+    end
   end
 
   context 'never' do
@@ -488,6 +497,42 @@ RSpec.describe RuboCop::Cop::Style::FrozenStringLiteralComment, :config do
 
         puts 1
         # frozen_string_literal: true
+      RUBY
+    end
+
+    [
+      '# frozen-string-literal: true',
+      '# frozen_string_literal: TRUE',
+      '# frozen-string_literal: true',
+      '# frozen-string_literal: TRUE',
+      '# frozen_string-literal: true',
+      '# FROZEN-STRING-LITERAL: true',
+      '# FROZEN_STRING_LITERAL: true'
+    ].each do |magic_comment|
+      it "registers an offense for having a `#{magic_comment}` frozen string literal comment" do
+        expect_offense(<<~RUBY, magic_comment: magic_comment)
+          #{magic_comment}
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary frozen string literal comment.
+
+          puts 1
+        RUBY
+
+        expect_correction(<<~RUBY)
+          puts 1
+        RUBY
+      end
+    end
+
+    it 'registers an offense for having a frozen string literal comment with multiple spaces at beginning' do
+      expect_offense(<<~RUBY)
+        #   frozen_string_literal: true
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary frozen string literal comment.
+
+        puts 1
+      RUBY
+
+      expect_correction(<<~RUBY)
+        puts 1
       RUBY
     end
   end
@@ -1041,9 +1086,24 @@ RSpec.describe RuboCop::Cop::Style::FrozenStringLiteralComment, :config do
         # frozen_string_literal: true
       RUBY
     end
+
+    %w[FALSE falsE].each do |value|
+      it "registers an offense for a frozen string literal with `#{value}` literal" do
+        expect_offense(<<~RUBY, value: value)
+          # frozen_string_literal: #{value}
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Frozen string literal comment must be set to `true`.
+          puts 1
+        RUBY
+
+        expect_correction(<<~RUBY)
+          # frozen_string_literal: true
+          puts 1
+        RUBY
+      end
+    end
   end
 
-  context 'target_ruby_version < 2.3', :ruby22 do
+  context 'target_ruby_version < 2.3', :ruby22, unsupported_on: :prism do
     it 'accepts freezing a string' do
       expect_no_offenses('"x".freeze')
     end

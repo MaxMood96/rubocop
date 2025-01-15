@@ -290,12 +290,45 @@ RSpec.describe RuboCop::Cop::Metrics::Utils::CodeLengthCalculator do
         length = described_class.new(source.ast, source, foldable_types: %i[method_call]).calculate
         expect(length).to eq(4)
       end
+
+      it 'folds method calls with heredocs if asked' do
+        source = parse_source(<<~RUBY)
+          def test
+            a = 1
+            foo <<~HERE, <<~THERE
+              2
+              3
+              4
+            HERE
+              5
+              6
+              7
+           THERE
+          end
+        RUBY
+
+        length = described_class.new(source.ast, source, foldable_types: %i[method_call]).calculate
+        expect(length).to eq(2)
+      end
     end
 
     context 'when class' do
       it 'calculates class length' do
         source = parse_source(<<~RUBY)
           class Test
+            a = 1
+            # a = 2
+            a = 3
+          end
+        RUBY
+
+        length = described_class.new(source.ast, source).calculate
+        expect(length).to eq(2)
+      end
+
+      it 'calculates singleton class length' do
+        source = parse_source(<<~RUBY)
+          class << self
             a = 1
             # a = 2
             a = 3
@@ -434,9 +467,12 @@ RSpec.describe RuboCop::Cop::Metrics::Utils::CodeLengthCalculator do
         end
       RUBY
 
+      warning = 'Unknown foldable type: :send. ' \
+                'Valid foldable types are: array, hash, heredoc, method_call.'
+
       expect do
-        described_class.new(source.ast, source, foldable_types: %i[unknown]).calculate
-      end.to raise_error(ArgumentError, /Unknown foldable type/)
+        described_class.new(source.ast, source, foldable_types: %i[send]).calculate
+      end.to raise_error(RuboCop::Warning, warning)
     end
   end
 end

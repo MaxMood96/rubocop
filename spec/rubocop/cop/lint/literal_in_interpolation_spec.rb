@@ -89,31 +89,113 @@ RSpec.describe RuboCop::Cop::Lint::LiteralInInterpolation, :config do
     end
   end
 
-  it_behaves_like('literal interpolation', 1)
-  it_behaves_like('literal interpolation', -1)
-  it_behaves_like('literal interpolation', '1_123', '1123')
-  it_behaves_like('literal interpolation', '123_456_789_123_456_789', '123456789123456789')
-  it_behaves_like('literal interpolation', '1.2e-3', '0.0012')
-  it_behaves_like('literal interpolation', '0xaabb', '43707')
-  it_behaves_like('literal interpolation', '0o377', '255')
-  it_behaves_like('literal interpolation', 2.0)
-  it_behaves_like('literal interpolation', '[]', '[]')
-  it_behaves_like('literal interpolation', '["a", "b"]', '[\"a\", \"b\"]')
-  it_behaves_like('literal interpolation', '{"a" => "b"}', '{\"a\" => \"b\"}')
-  it_behaves_like('literal interpolation', true)
-  it_behaves_like('literal interpolation', false)
-  it_behaves_like('literal interpolation', 'nil', '')
-  it_behaves_like('literal interpolation', ':symbol', 'symbol')
-  it_behaves_like('literal interpolation', ':"symbol"', 'symbol')
-  it_behaves_like('literal interpolation', 1..2)
-  it_behaves_like('literal interpolation', 1...2)
-  it_behaves_like('literal interpolation', '%w[]', '[]')
-  it_behaves_like('literal interpolation', '%w[v1]', '[\"v1\"]')
-  it_behaves_like('literal interpolation', '%w[v1 v2]', '[\"v1\", \"v2\"]')
-  it_behaves_like('literal interpolation', '%i[s1 s2]', '[\"s1\", \"s2\"]')
-  it_behaves_like('literal interpolation', '%I[s1 s2]', '[\"s1\", \"s2\"]')
-  it_behaves_like('literal interpolation', '%i[s1     s2]', '[\"s1\", \"s2\"]')
-  it_behaves_like('literal interpolation', '%i[ s1   s2 ]', '[\"s1\", \"s2\"]')
+  describe 'type int' do
+    it_behaves_like('literal interpolation', 1)
+    it_behaves_like('literal interpolation', -1)
+    it_behaves_like('literal interpolation', '1_123', '1123')
+    it_behaves_like('literal interpolation', '123_456_789_123_456_789', '123456789123456789')
+    it_behaves_like('literal interpolation', '0xaabb', '43707')
+    it_behaves_like('literal interpolation', '0o377', '255')
+  end
+
+  describe 'type float' do
+    it_behaves_like('literal interpolation', '1.2e-3', '0.0012')
+    it_behaves_like('literal interpolation', 2.0)
+  end
+
+  describe 'type str' do
+    it_behaves_like('literal interpolation', '"double_quot_string"', 'double_quot_string')
+    it_behaves_like('literal interpolation', "'single_quot_string'", 'single_quot_string')
+    it_behaves_like('literal interpolation', '"double_quot_string: \'"', "double_quot_string: '")
+    it_behaves_like('literal interpolation', "'single_quot_string: \"'", 'single_quot_string: \"')
+  end
+
+  describe 'type sym' do
+    it_behaves_like('literal interpolation', ':symbol', 'symbol')
+    it_behaves_like('literal interpolation', ':"symbol"', 'symbol')
+    it_behaves_like('literal interpolation',
+                    ':"single quot in symbol: \'"', "single quot in symbol: '")
+    it_behaves_like('literal interpolation',
+                    ":'double quot in symbol: \"'", 'double quot in symbol: \"')
+  end
+
+  describe 'type array' do
+    it_behaves_like('literal interpolation', '[]', '[]')
+    it_behaves_like('literal interpolation', '["a", "b"]', '[\"a\", \"b\"]')
+    it_behaves_like('literal interpolation', '%w[]', '[]')
+    it_behaves_like('literal interpolation', '%w[v1]', '[\"v1\"]')
+    it_behaves_like('literal interpolation', '%w[v1 v2]', '[\"v1\", \"v2\"]')
+    it_behaves_like('literal interpolation', '%i[s1 s2]', '[\"s1\", \"s2\"]')
+    it_behaves_like('literal interpolation', '%I[s1 s2]', '[\"s1\", \"s2\"]')
+    it_behaves_like('literal interpolation', '%i[s1     s2]', '[\"s1\", \"s2\"]')
+    it_behaves_like('literal interpolation', '%i[ s1   s2 ]', '[\"s1\", \"s2\"]')
+  end
+
+  describe 'type hash' do
+    it_behaves_like('literal interpolation', '{"a" => "b"}', '{\"a\"=>\"b\"}')
+    it_behaves_like('literal interpolation', "{ foo: 'bar', :fiz => \"buzz\" }",
+                    '{:foo=>\"bar\", :fiz=>\"buzz\"}')
+    it_behaves_like('literal interpolation', "{ foo: { fiz: 'buzz' } }", '{:foo=>{:fiz=>\"buzz\"}}')
+    it_behaves_like(
+      'literal interpolation',
+      '{ num: { separate: 1_123, long_separate: 123_456_789_123_456_789, exponent: 1.2e-3 } }',
+      '{:num=>{:separate=>1123, :long_separate=>123456789123456789, :exponent=>0.0012}}'
+    )
+    it_behaves_like('literal interpolation', '{ n_adic_num: { hex: 0xaabb, oct: 0o377 } }',
+                    '{:n_adic_num=>{:hex=>43707, :oct=>255}}')
+    it_behaves_like(
+      'literal interpolation',
+      '{ double_quot: { simple: "double_quot", single_in_double: "double_quot: \'" } }',
+      '{:double_quot=>{:simple=>\"double_quot\", :single_in_double=>\"double_quot: \'\"}}'
+    )
+    it_behaves_like(
+      'literal interpolation',
+      "{ single_quot: { simple: 'single_quot', double_in_single: 'single_quot: \"' } }",
+      '{:single_quot=>{:simple=>\"single_quot\", :double_in_single=>\"single_quot: \\\\\\"\"}}'
+    )
+    it_behaves_like('literal interpolation', '{ bool: { key: true } }', '{:bool=>{:key=>true}}')
+    it_behaves_like('literal interpolation', '{ bool: { key: false } }', '{:bool=>{:key=>false}}')
+    it_behaves_like('literal interpolation', '{ nil: { key: nil } }', '{:nil=>{:key=>nil}}')
+    it_behaves_like('literal interpolation', '{ symbol: { key: :symbol } }',
+                    '{:symbol=>{:key=>:symbol}}')
+    it_behaves_like('literal interpolation', '{ symbol: { key: :"symbol" } }',
+                    '{:symbol=>{:key=>:symbol}}')
+    it_behaves_like('literal interpolation',
+                    '{ single_quot_symbol: { key: :"single_quot_in_symbol: \'" } }',
+                    '{:single_quot_symbol=>{:key=>:\"single_quot_in_symbol: \'\"}}')
+    it_behaves_like('literal interpolation',
+                    "{ double_quot_symbol: { key: :'double_quot_in_symbol: \"' } }",
+                    '{:double_quot_symbol=>{:key=>:\"double_quot_in_symbol: \\\\\"\"}}')
+    it_behaves_like('literal interpolation',
+                    '{ single_quot_symbol_not_in_space: { key: :"single_quot_in_symbol:\'" } }',
+                    '{:single_quot_symbol_not_in_space=>{:key=>:\"single_quot_in_symbol:\'\"}}')
+    it_behaves_like('literal interpolation',
+                    '{ single_quot_symbol_in_space: { key: :"single_quot_in_symbol: " } }',
+                    '{:single_quot_symbol_in_space=>{:key=>:\"single_quot_in_symbol: \"}}')
+    it_behaves_like('literal interpolation', '{ range: { key: 1..2 } }', '{:range=>{:key=>1..2}}')
+    it_behaves_like('literal interpolation', '{ range: { key: 1...2 } }', '{:range=>{:key=>1...2}}')
+    it_behaves_like('literal interpolation', '{ array: { key: %w[] } }', '{:array=>{:key=>[]}}')
+    it_behaves_like('literal interpolation', '{ array: { key: %w[v1] } }',
+                    '{:array=>{:key=>[\"v1\"]}}')
+    it_behaves_like('literal interpolation', '{ array: { key: %w[v1 v2] } }',
+                    '{:array=>{:key=>[\"v1\", \"v2\"]}}')
+    it_behaves_like('literal interpolation', '{ array: { key: %i[s1 s2] } }',
+                    '{:array=>{:key=>[\"s1\", \"s2\"]}}')
+    it_behaves_like('literal interpolation', '{ array: { key: %I[s1 s2] } }',
+                    '{:array=>{:key=>[\"s1\", \"s2\"]}}')
+    it_behaves_like('literal interpolation', '{ array: { key: %i[s1     s2] } }',
+                    '{:array=>{:key=>[\"s1\", \"s2\"]}}')
+    it_behaves_like('literal interpolation', '{ array: { key: %i[ s1   s2 ] } }',
+                    '{:array=>{:key=>[\"s1\", \"s2\"]}}')
+  end
+
+  describe 'type else' do
+    it_behaves_like('literal interpolation', 'nil', '')
+    it_behaves_like('literal interpolation', 1..2)
+    it_behaves_like('literal interpolation', 1...2)
+    it_behaves_like('literal interpolation', true)
+    it_behaves_like('literal interpolation', false)
+  end
 
   shared_examples 'literal interpolation in words literal' do |prefix|
     let(:word) { 'interpolation' }
@@ -121,6 +203,12 @@ RSpec.describe RuboCop::Cop::Lint::LiteralInInterpolation, :config do
     it "accepts interpolation of a string literal with space in #{prefix}[]" do
       expect_no_offenses(<<~RUBY)
         #{prefix}[\#{"this interpolation"} is significant]
+      RUBY
+    end
+
+    it "accepts interpolation of an empty string literal in #{prefix}[]" do
+      expect_no_offenses(<<~RUBY)
+        #{prefix}[\#{""} is significant]
       RUBY
     end
 
@@ -171,7 +259,7 @@ RSpec.describe RuboCop::Cop::Lint::LiteralInInterpolation, :config do
       RUBY
 
       expect_correction(<<~RUBY)
-        #{prefix}[this #{[word].inspect.gsub(/"/, '\"')} is not significant]
+        #{prefix}[this #{[word].inspect.gsub('"', '\"')} is not significant]
       RUBY
     end
 
@@ -333,6 +421,104 @@ RSpec.describe RuboCop::Cop::Lint::LiteralInInterpolation, :config do
       expect_correction(<<~RUBY)
         /this is the #{expected}/
       RUBY
+    end
+  end
+
+  context 'handling regexp special characters' do
+    context 'when inside a `regexp` literal' do
+      it 'properly escapes a forward slash' do
+        expect_offense(<<~'RUBY')
+          /test#{'/'}test/
+                 ^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~'RUBY')
+          /test\/test/
+        RUBY
+      end
+
+      it 'properly escapes multiple forward slashes' do
+        expect_offense(<<~'RUBY')
+          /test#{'/a/b/c/'}test/
+                 ^^^^^^^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~'RUBY')
+          /test\/a\/b\/c\/test/
+        RUBY
+      end
+
+      it 'handles escaped forward slashes' do
+        expect_offense(<<~'RUBY')
+          /test#{'\\/'}test/
+                 ^^^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~'RUBY')
+          /test\/test/
+        RUBY
+      end
+
+      it 'handles escaped backslashes' do
+        expect_offense(<<~'RUBY')
+          /test#{'\\\\/'}test/
+                 ^^^^^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~'RUBY')
+          /test\\\/test/
+        RUBY
+      end
+
+      it 'handles slashes inside other non-strings' do
+        expect_offense(<<~'RUBY')
+          /test#{%w[/ \\]}test/
+                 ^^^^^^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~'RUBY')
+          /test[\"\/\", \"\\\\\"]test/
+        RUBY
+      end
+    end
+
+    context 'when inside a %r{} `regexp`' do
+      it 'does not escape the autocorrection' do
+        expect_offense(<<~'RUBY')
+          %r{test#{'/'}test}
+                   ^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          %r{test/test}
+        RUBY
+      end
+    end
+
+    context 'when inside a non-`regexp` node' do
+      it 'does not escape the autocorrection' do
+        expect_offense(<<~'RUBY')
+          "test#{'/'}test"
+                 ^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          "test/test"
+        RUBY
+      end
+    end
+
+    context 'with invalid string literal' do
+      it 'registers an offense' do
+        expect_offense(<<~'RUBY')
+          "#{"\201\203"}"
+             ^^^^^^^^^^ Literal interpolation detected.
+        RUBY
+
+        expect_correction(<<~'RUBY')
+          "\201\203"
+        RUBY
+      end
     end
   end
 end

@@ -10,10 +10,72 @@ RSpec.describe RuboCop::Cop::Lint::Debugger, :config do
       RUBY
     end
 
+    it 'does not register an offense for a `custom_debugger` call when used in assignment' do
+      expect_no_offenses(<<~RUBY)
+        x.y = custom_debugger
+      RUBY
+    end
+
     it 'registers an offense for a `custom_debugger` call' do
       expect_offense(<<~RUBY)
         custom_debugger
         ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+      RUBY
+    end
+
+    it 'registers an offense for a `custom_debugger` call when used in block' do
+      expect_offense(<<~RUBY)
+        x.y = do_something { custom_debugger }
+                             ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+      RUBY
+    end
+
+    it 'registers an offense for a `custom_debugger` call when used in numbered block' do
+      expect_offense(<<~RUBY)
+        x.y = do_something do
+          z(_1)
+          custom_debugger
+          ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+        end
+      RUBY
+    end
+
+    it 'registers an offense for a `custom_debugger` call when used in lambda literal' do
+      expect_offense(<<~RUBY)
+        x.y = -> { custom_debugger }
+                   ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+      RUBY
+    end
+
+    it 'registers an offense for a `custom_debugger` call when used in `lambda`' do
+      expect_offense(<<~RUBY)
+        x.y = lambda { custom_debugger }
+                       ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+      RUBY
+    end
+
+    it 'registers an offense for a `custom_debugger` call when used in `proc`' do
+      expect_offense(<<~RUBY)
+        x.y = proc { custom_debugger }
+                     ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+      RUBY
+    end
+
+    it 'registers an offense for a `custom_debugger` call when used in `Proc.new`' do
+      expect_offense(<<~RUBY)
+        x.y = Proc.new { custom_debugger }
+                         ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+      RUBY
+    end
+
+    it 'registers an offense for a `custom_debugger` call when used within method arguments a `begin`...`end` block' do
+      expect_offense(<<~RUBY)
+        do_something(
+          begin
+            custom_debugger
+            ^^^^^^^^^^^^^^^ Remove debugger entry point `custom_debugger`.
+          end
+        )
       RUBY
     end
 
@@ -62,15 +124,71 @@ RSpec.describe RuboCop::Cop::Lint::Debugger, :config do
     end
   end
 
+  context 'with the DebuggerRequires configuration' do
+    let(:cop_config) do
+      {
+        'DebuggerRequires' => {
+          'my_debugger' => %w[my_debugger],
+          'other_debugger' => %w[other_debugger/start]
+        }
+      }
+    end
+
+    it 'registers an offense' do
+      expect_offense(<<~RUBY)
+        require 'my_debugger'
+        ^^^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `require 'my_debugger'`.
+      RUBY
+    end
+
+    it 'registers no offense for a require without arguments' do
+      expect_no_offenses('require')
+    end
+
+    it 'registers no offense for a require with multiple arguments' do
+      expect_no_offenses('require "my_debugger", "something_else"')
+    end
+
+    it 'registers no offense for a require with non-string arguments' do
+      expect_no_offenses('require my_debugger')
+    end
+
+    context 'when a require group is disabled with nil' do
+      before { cop_config['DebuggerRequires']['my_debugger'] = nil }
+
+      it 'does not register an offense for a require call' do
+        expect_no_offenses('require "my_debugger"')
+      end
+
+      it 'does register an offense for another group' do
+        expect_offense(<<~RUBY)
+          require 'other_debugger/start'
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `require 'other_debugger/start'`.
+        RUBY
+      end
+    end
+
+    context 'when the config is specified as an array' do
+      let(:cop_config) { { 'DebuggerRequires' => %w[start_debugging] } }
+
+      it 'registers an offense' do
+        expect_offense(<<~RUBY)
+          require 'start_debugging'
+          ^^^^^^^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `require 'start_debugging'`.
+        RUBY
+      end
+    end
+  end
+
   context 'built-in methods' do
-    it 'registers an offense for a irb binding call' do
+    it 'registers an offense for a `binding.irb` call' do
       expect_offense(<<~RUBY)
         binding.irb
         ^^^^^^^^^^^ Remove debugger entry point `binding.irb`.
       RUBY
     end
 
-    it 'registers an offense for a binding.irb with Kernel call' do
+    it 'registers an offense for a `Kernel.binding.irb` call' do
       expect_offense(<<~RUBY)
         Kernel.binding.irb
         ^^^^^^^^^^^^^^^^^^ Remove debugger entry point `Kernel.binding.irb`.
@@ -138,6 +256,14 @@ RSpec.describe RuboCop::Cop::Lint::Debugger, :config do
         it { expect(do_something(k: p)).to eq bar }
       RUBY
     end
+
+    it 'does not register an offense when `p` is an array argument of method call' do
+      expect_no_offenses(<<~RUBY)
+        let(:p) { foo }
+
+        it { expect(do_something([k, p])).to eq bar }
+      RUBY
+    end
   end
 
   context 'byebug' do
@@ -192,6 +318,20 @@ RSpec.describe RuboCop::Cop::Lint::Debugger, :config do
       RUBY
     end
 
+    it 'registers an offense for save_page' do
+      expect_offense(<<~RUBY)
+        save_page
+        ^^^^^^^^^ Remove debugger entry point `save_page`.
+      RUBY
+    end
+
+    it 'registers an offense for save_screenshot' do
+      expect_offense(<<~RUBY)
+        save_screenshot
+        ^^^^^^^^^^^^^^^ Remove debugger entry point `save_screenshot`.
+      RUBY
+    end
+
     context 'with an argument' do
       it 'registers an offense for save_and_open_page' do
         expect_offense(<<~RUBY)
@@ -204,6 +344,50 @@ RSpec.describe RuboCop::Cop::Lint::Debugger, :config do
         expect_offense(<<~RUBY)
           save_and_open_screenshot foo
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `save_and_open_screenshot foo`.
+        RUBY
+      end
+
+      it 'registers an offense for save_page' do
+        expect_offense(<<~RUBY)
+          save_page foo
+          ^^^^^^^^^^^^^ Remove debugger entry point `save_page foo`.
+        RUBY
+      end
+
+      it 'registers an offense for save_screenshot' do
+        expect_offense(<<~RUBY)
+          save_screenshot foo
+          ^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `save_screenshot foo`.
+        RUBY
+      end
+    end
+
+    context 'with a page receiver' do
+      it 'registers an offense for save_and_open_page' do
+        expect_offense(<<~RUBY)
+          page.save_and_open_page
+          ^^^^^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `page.save_and_open_page`.
+        RUBY
+      end
+
+      it 'registers an offense for save_and_open_screenshot' do
+        expect_offense(<<~RUBY)
+          page.save_and_open_screenshot
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `page.save_and_open_screenshot`.
+        RUBY
+      end
+
+      it 'registers an offense for save_page' do
+        expect_offense(<<~RUBY)
+          page.save_page
+          ^^^^^^^^^^^^^^ Remove debugger entry point `page.save_page`.
+        RUBY
+      end
+
+      it 'registers an offense for save_screenshot' do
+        expect_offense(<<~RUBY)
+          page.save_screenshot
+          ^^^^^^^^^^^^^^^^^^^^ Remove debugger entry point `page.save_screenshot`.
         RUBY
       end
     end
@@ -240,6 +424,20 @@ RSpec.describe RuboCop::Cop::Lint::Debugger, :config do
   end
 
   context 'pry' do
+    it 'registers an offense for a pry call' do
+      expect_offense(<<~RUBY)
+        pry
+        ^^^ Remove debugger entry point `pry`.
+      RUBY
+    end
+
+    it 'registers an offense for a pry with an argument call' do
+      expect_offense(<<~RUBY)
+        pry foo
+        ^^^^^^^ Remove debugger entry point `pry foo`.
+      RUBY
+    end
+
     it 'registers an offense for a pry binding call' do
       expect_offense(<<~RUBY)
         binding.pry
@@ -298,10 +496,6 @@ RSpec.describe RuboCop::Cop::Lint::Debugger, :config do
           ^^^^^^^^^^^^ Remove debugger entry point `::Pry.rescue`.
         end
       RUBY
-    end
-
-    it 'does not register an offense for a `pry` call without binding' do
-      expect_no_offenses('pry')
     end
 
     it 'does not register an offense for a `rescue` call without Pry' do

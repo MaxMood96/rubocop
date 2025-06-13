@@ -11,6 +11,43 @@
 
 ## master (unreleased)
 
+## 1.76.1 (2025-06-09)
+
+### Bug fixes
+
+* [#14245](https://github.com/rubocop/rubocop/pull/14245): Fix an error for `Lint/EmptyInterpolation` when using primitives in interpolation. ([@ka8725][])
+* [#14233](https://github.com/rubocop/rubocop/issues/14233): Fix an error for `Style/SafeNavigation` when using ternary expression with index access call. ([@koic][])
+* [#14236](https://github.com/rubocop/rubocop/issues/14236): Fix an error for `Style/SafeNavigation` when using ternary expression with operator method call. ([@koic][])
+* [#14249](https://github.com/rubocop/rubocop/issues/14249): Fix false positives for `Style/RedundantArrayFlatten` when `Array#join` is used with an argument other than the default `nil`. ([@koic][])
+* [#14239](https://github.com/rubocop/rubocop/issues/14239): Fix false positives for `Style/RedundantParentheses` when using one-line `in` pattern matching in operator. ([@koic][])
+* [#14240](https://github.com/rubocop/rubocop/issues/14240): Fix `Naming/PredicateMethod` cop error on empty parentheses method body. ([@viralpraxis][])
+* [#14235](https://github.com/rubocop/rubocop/pull/14235): Fix `Style/SafeNavigation` cop error on indexed assignment in ternary expression. ([@viralpraxis][])
+* [#14247](https://github.com/rubocop/rubocop/pull/14247): Fix `Style/SafeNavigation` invalid autocorrection on double colon method call. ([@viralpraxis][])
+
+## 1.76.0 (2025-06-04)
+
+### New features
+
+* [#12360](https://github.com/rubocop/rubocop/issues/12360): Add new `Naming/PredicateMethod` cop to check that predicate methods end with `?` and non-predicate methods do not. ([@dvandersluis][])
+* [#13121](https://github.com/rubocop/rubocop/issues/13121): Add new `Style/EmptyStringInsideInterpolation` cop. ([@zopolis4][])
+* [#14091](https://github.com/rubocop/rubocop/pull/14091): Add new cop `Style/RedundantArrayFlatten`. ([@lovro-bikic][])
+* [#14184](https://github.com/rubocop/rubocop/pull/14184): Add new cop `Lint/UselessOr`. ([@lovro-bikic][])
+* [#14221](https://github.com/rubocop/rubocop/pull/14221): Enhance `Gemspec` department cops to detect offenses if specification variable is `it` or a numbered parameter. ([@viralpraxis][])
+* [#14166](https://github.com/rubocop/rubocop/pull/14166): Add new cop `Lint/UselessDefaultValueArgument`. ([@lovro-bikic][])
+
+### Bug fixes
+
+* [#14228](https://github.com/rubocop/rubocop/issues/14228): Fix a false positive for `Style/RedundantParentheses` when using a one-line `rescue` expression as a method argument. ([@koic][])
+* [#14224](https://github.com/rubocop/rubocop/pull/14224): Fix false negatives for `Style/RedundantParentheses` when using one-line pattern matching. ([@koic][])
+* [#14205](https://github.com/rubocop/rubocop/issues/14205): False negatives in `Style/SafeNavigation` when a ternary expression is used in a method argument. ([@steiley][])
+* [#14226](https://github.com/rubocop/rubocop/pull/14226): Fix `Lint/LiteralAsCondition` autocorrect when branches of a condition have comments. ([@zopolis4][])
+
+### Changes
+
+* [#14066](https://github.com/rubocop/rubocop/pull/14066): Add `EnforcedStyle: allow_single_line` as the default to `Style/ItBlockParameter`. ([@koic][])
+* [#13788](https://github.com/rubocop/rubocop/pull/13788): Disable `Lint/ShadowingOuterLocalVariable` by default. ([@nekketsuuu][])
+* [#14215](https://github.com/rubocop/rubocop/pull/14215): Recognize inequation (`!=`) in `Lint/IdentityComparison`. ([@lovro-bikic][])
+
 ## 1.75.8 (2025-05-28)
 
 ### Bug fixes
@@ -4108,3 +4145,5 @@
 [@sferik]: https://github.com/sferik
 [@Morriar]: https://github.com/Morriar
 [@daisuke]: https://github.com/daisuke
+[@steiley]: https://github.com/steiley
+[@ka8725]: https://github.com/ka8725

@@ -53,7 +53,7 @@ To prevent an unwanted RuboCop update you might want to use a conservative versi
 in your `Gemfile`:
 
 ```rb
-gem 'rubocop', '~> 1.75', require: false
+gem 'rubocop', '~> 1.76', require: false
 ```
 
 See [our versioning policy](https://docs.rubocop.org/rubocop/versioning.html) for further details.
@@ -112,7 +112,7 @@ Here's a list of RuboCop's core developers:
 * [Yuji Nakayama](https://github.com/yujinakayama) (retired)
 * [Evgeni Dzhelyov](https://github.com/edzhelyov) (retired)
 * [Ted Johansson](https://github.com/drenmi)
-* [Masataka Kuwabara](https://github.com/pocke)
+* [Masataka Kuwabara](https://github.com/pocke) (retired)
 * [Koichi Ito](https://github.com/koic)
 * [Maxim Krizhanovski](https://github.com/darhazer)
 * [Benjamin Quorning](https://github.com/bquorning)

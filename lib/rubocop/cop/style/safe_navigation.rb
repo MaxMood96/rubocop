@@ -86,6 +86,10 @@ module RuboCop
       #   foo.baz = bar if foo
       #   foo.baz + bar if foo
       #   foo.bar > 2 if foo
+      #
+      #   foo ? foo[index] : nil    # Ignored `foo&.[](index)` due to unclear readability benefit.
+      #   foo ? foo[idx] = v : nil  # Ignored `foo&.[]=(idx, v)` due to unclear readability benefit.
+      #   foo ? foo * 42 : nil      # Ignored `foo&.*(42)` due to unclear readability benefit.
       class SafeNavigation < Base # rubocop:disable Metrics/ClassLength
         include NilMethods
         include RangeHelp
@@ -146,6 +150,7 @@ module RuboCop
 
           body = extract_if_body(node)
           method_call = receiver.parent
+          return if dotless_operator_call?(method_call) || method_call.double_colon?
 
           removal_ranges = [begin_range(node, body), end_range(node, body)]
 
@@ -181,6 +186,8 @@ module RuboCop
           end
         end
 
+        private
+
         def report_offense(node, rhs, rhs_receiver, *removal_ranges, offense_range: node)
           add_offense(offense_range) do |corrector|
             next if ignored_node?(node)
@@ -197,8 +204,6 @@ module RuboCop
             add_safe_nav_to_all_methods_in_chain(corrector, rhs_receiver, rhs)
           end
         end
-
-        private
 
         def find_method_chain(node)
           return node unless node&.parent&.call_type?
@@ -251,6 +256,12 @@ module RuboCop
           else
             node.node_parts[1]
           end
+        end
+
+        def dotless_operator_call?(method_call)
+          return false if method_call.loc.dot
+
+          method_call.method?(:[]) || method_call.method?(:[]=) || method_call.operator_method?
         end
 
         def handle_comments(corrector, node, method_call)
@@ -380,8 +391,7 @@ module RuboCop
                                                  method_chain)
           start_method.each_ancestor do |ancestor|
             break unless %i[send block].include?(ancestor.type)
-            next unless ancestor.send_type?
-            next if ancestor.safe_navigation?
+            next if !ancestor.send_type? || ancestor.operator_method?
 
             corrector.insert_before(ancestor.loc.dot, '&')
 

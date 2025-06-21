@@ -339,8 +339,27 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
 
     expect_correction(<<~RUBY)
       x.y(foo &&
-        bar
-      )
+        bar)
+    RUBY
+  end
+
+  it 'registers an offense for parens around method call chained to an `&&` expression' do
+    # Style/MultipleComparison autocorrects:
+    # (
+    #   foo == 'a' ||
+    #   foo == 'b' ||
+    #   foo == 'c'
+    # ) && bar
+    # to the following:
+    expect_offense(<<~RUBY)
+      (
+      ^ Don't use parentheses around a method call.
+        ['a', 'b', 'c'].include?(foo)
+      ) && bar
+    RUBY
+
+    expect_correction(<<~RUBY)
+      ['a', 'b', 'c'].include?(foo) && bar
     RUBY
   end
 
@@ -391,8 +410,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     RUBY
 
     expect_correction(<<~RUBY)
-      [1
-      ]
+      [1]
     RUBY
   end
 
@@ -410,9 +428,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
 
         expect_correction(<<~RUBY)
           [
-          #{trailing_whitespace * 2}
-              1
-          #{trailing_whitespace * 2}
+            1
           ]
         RUBY
       end
@@ -442,8 +458,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
 
         expect_correction(<<~RUBY)
           [
-          #{trailing_whitespace * 2}
-              1,
+            1,
             2
           ]
         RUBY
@@ -462,8 +477,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
 
         expect_correction(<<~RUBY)
           [
-            x =#{trailing_whitespace}
-              1,
+            x = 1,
             y = 2
           ]
         RUBY
@@ -490,8 +504,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
     RUBY
 
     expect_correction(<<~RUBY)
-      {a: 1
-      }
+      {a: 1}
     RUBY
   end
 
@@ -1156,7 +1169,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   end
 
   # Ruby 2.7's one-line `in` pattern node type is `match-pattern`.
-  it 'registers parentheses when using one-line hash `in` pattern matching in a redundant parentheses', :ruby27 do
+  it 'registers parentheses when using one-line `in` pattern matching in a redundant parentheses', :ruby27 do
     expect_offense(<<~RUBY)
       (expression in pattern)
       ^^^^^^^^^^^^^^^^^^^^^^^ Don't use parentheses around a one-line pattern matching.
@@ -1168,7 +1181,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   end
 
   # Ruby 3.0's one-line `in` pattern node type is `match-pattern-p`.
-  it 'registers parentheses when using one-line hash `in` pattern matching in a redundant parentheses', :ruby30 do
+  it 'registers parentheses when using one-line `in` pattern matching in a redundant parentheses', :ruby30 do
     expect_offense(<<~RUBY)
       (expression in pattern)
       ^^^^^^^^^^^^^^^^^^^^^^^ Don't use parentheses around a one-line pattern matching.
@@ -1180,7 +1193,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   end
 
   # Ruby 3.0's one-line `=>` pattern node type is `match-pattern`.
-  it 'registers an offense when using one-line hash `=>` pattern matching in a redundant parentheses', :ruby30 do
+  it 'registers an offense when using one-line `=>` pattern matching in a redundant parentheses', :ruby30 do
     expect_offense(<<~RUBY)
       (expression => pattern)
       ^^^^^^^^^^^^^^^^^^^^^^^ Don't use parentheses around a one-line pattern matching.
@@ -1192,30 +1205,138 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
   end
 
   # Ruby 2.7's one-line `in` pattern node type is `match-pattern`.
-  it 'accepts parentheses when using one-line hash `in` pattern matching in a method argument', :ruby27 do
+  it 'accepts parentheses when using one-line `in` pattern matching in a method argument', :ruby27 do
     expect_no_offenses(<<~RUBY)
       foo((bar in baz))
     RUBY
   end
 
   # Ruby 2.7's one-line `in` pattern node type is `match-pattern`.
-  it 'accepts parentheses when using one-line hash `in` pattern matching in a method argument with safe navigation', :ruby27 do
+  it 'accepts parentheses when using one-line `in` pattern matching in a method argument with safe navigation', :ruby27 do
     expect_no_offenses(<<~RUBY)
       obj&.foo((bar in baz))
     RUBY
   end
 
   # Ruby 3.0's one-line `in` pattern node type is `match-pattern-p`.
-  it 'accepts parentheses when using one-line hash `in` pattern matching in a method argument', :ruby30 do
+  it 'accepts parentheses when using one-line `in` pattern matching in a method argument', :ruby30 do
     expect_no_offenses(<<~RUBY)
       foo((bar in baz))
     RUBY
   end
 
   # Ruby 3.0's one-line `in` pattern node type is `match-pattern-p`.
-  it 'accepts parentheses when using one-line hash `in` pattern matching in a method argument with safe navigation', :ruby30 do
+  it 'accepts parentheses when using one-line `in` pattern matching in a method argument with safe navigation', :ruby30 do
     expect_no_offenses(<<~RUBY)
       obj&.foo((bar in baz))
+    RUBY
+  end
+
+  it 'accepts parentheses when using one-line `in` pattern matching in `&&` operator', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      (foo in bar) && (baz in qux)
+    RUBY
+  end
+
+  it 'accepts parentheses when using one-line `in` pattern matching in `||` operator', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      (foo in bar) || (baz in qux)
+    RUBY
+  end
+
+  it 'accepts parentheses when assigning a parenthesized one-line `in` pattern matching', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      foo = (bar in baz)
+    RUBY
+  end
+
+  it 'accepts parentheses when or-assigning a parenthesized one-line `in` pattern matching', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      foo ||= (bar in baz)
+    RUBY
+  end
+
+  it 'accepts parentheses when using parenthesized one-line `in` pattern matching in endless method definition', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      def foo = (bar in baz | qux)
+    RUBY
+  end
+
+  it 'accepts parentheses when using parenthesized one-line `=>` pattern matching in endless method definition', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      def foo = (bar => baz | qux)
+    RUBY
+  end
+
+  it 'accepts parentheses when using parenthesized one-line `in` pattern matching in endless singleton method definition', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      def self.foo = (bar in baz | qux)
+    RUBY
+  end
+
+  it 'accepts parentheses when using parenthesized one-line `=>` pattern matching in endless singleton method definition', :ruby30 do
+    expect_no_offenses(<<~RUBY)
+      def self.foo = (bar => baz | qux)
+    RUBY
+  end
+
+  it 'registers parentheses when using parenthesized one-line `in` pattern matching in method definition', :ruby30 do
+    expect_offense(<<~RUBY)
+      def foo
+        (bar in baz | qux)
+        ^^^^^^^^^^^^^^^^^^ Don't use parentheses around a one-line pattern matching.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def foo
+        bar in baz | qux
+      end
+    RUBY
+  end
+
+  it 'registers parentheses when using parenthesized one-line `=>` pattern matching in method definition', :ruby30 do
+    expect_offense(<<~RUBY)
+      def foo
+        (bar => baz | qux)
+        ^^^^^^^^^^^^^^^^^^ Don't use parentheses around a one-line pattern matching.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def foo
+        bar => baz | qux
+      end
+    RUBY
+  end
+
+  it 'registers parentheses when using parenthesized one-line `in` pattern matching in singleton method definition', :ruby30 do
+    expect_offense(<<~RUBY)
+      def self.foo
+        (bar in baz | qux)
+        ^^^^^^^^^^^^^^^^^^ Don't use parentheses around a one-line pattern matching.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def self.foo
+        bar in baz | qux
+      end
+    RUBY
+  end
+
+  it 'registers parentheses when using parenthesized one-line `=>` pattern matching in singleton method definition', :ruby30 do
+    expect_offense(<<~RUBY)
+      def self.foo
+        (bar => baz | qux)
+        ^^^^^^^^^^^^^^^^^^ Don't use parentheses around a one-line pattern matching.
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      def self.foo
+        bar => baz | qux
+      end
     RUBY
   end
 
@@ -1376,8 +1497,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
 
     expect_correction(<<~RUBY)
       foo(
-      #{trailing_whitespace * 2}
-          1,
+        1,
         2
       )
     RUBY
@@ -1403,15 +1523,12 @@ RSpec.describe RuboCop::Cop::Style::RedundantParentheses, :config do
 
     expect_correction(<<~RUBY)
       [
-      #{trailing_whitespace * 2}
         <<-STRING,
           foo
         STRING
-      #{trailing_whitespace * 2}
         <<-STRING
           bar
         STRING
-      #{trailing_whitespace * 2}
       ]
     RUBY
   end

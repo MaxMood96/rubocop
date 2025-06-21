@@ -281,6 +281,13 @@ Gemspec/AddRuntimeDependency:
   Include:
     - '**/*.gemspec'
 
+Gemspec/AttributeAssignment:
+  Description: 'Use consistent style for Gemspec attributes assignment.'
+  Enabled: pending
+  VersionAdded: '1.77'
+  Include:
+    - '**/*.gemspec'
+
 Gemspec/DependencyVersion:
   Description: 'Requires or forbids specifying gem dependency versions.'
   Enabled: false
@@ -1095,6 +1102,7 @@ Layout/LineLength:
   # To make it possible to copy or click on URIs in the code, we allow lines
   # containing a URI to be longer than Max.
   AllowURI: true
+  AllowQualifiedName: true
   URISchemes:
     - http
     - https
@@ -1923,7 +1931,7 @@ Lint/EmptyInterpolation:
   Enabled: true
   AutoCorrect: contextual
   VersionAdded: '0.20'
-  VersionChanged: '<<next>>'
+  VersionChanged: '1.76'
 
 Lint/EmptyWhen:
   Description: 'Checks for `when` branches with empty bodies.'
@@ -2400,6 +2408,7 @@ Lint/SelfAssignment:
   Description: 'Checks for self-assignments.'
   Enabled: true
   VersionAdded: '0.89'
+  AllowRBSInlineAnnotation: false
 
 Lint/SendWithMixinArgument:
   Description: 'Checks for `send` method when using mixin.'
@@ -2425,7 +2434,7 @@ Lint/ShadowingOuterLocalVariable:
                  for block arguments or block local variables.
   Enabled: false
   VersionAdded: '0.9'
-  VersionChanged: <<next>>
+  VersionChanged: '1.76'
 
 Lint/SharedMutableDefault:
   Description: 'Checks for mutable literals used as default arguments during Hash initialization.'
@@ -2616,7 +2625,7 @@ Lint/UselessConstantScoping:
 Lint/UselessDefaultValueArgument:
   Description: 'Checks for usage of `fetch` or `Array.new` with default value argument and block.'
   Enabled: pending
-  VersionAdded: '<<next>>'
+  VersionAdded: '1.76'
   Safe: false
   AllowedReceivers: []
 
@@ -2647,7 +2656,7 @@ Lint/UselessNumericOperation:
 Lint/UselessOr:
   Description: 'Checks for useless OR expressions.'
   Enabled: pending
-  VersionAdded: '<<next>>'
+  VersionAdded: '1.76'
 
 Lint/UselessRescue:
   Description: 'Checks for useless `rescue`s.'
@@ -2689,7 +2698,7 @@ Metrics/AbcSize:
                  A calculated magnitude based on number of assignments,
                  branches, and conditions.
   References:
-    - http://c2.com/cgi/wiki?AbcMetric
+    - https://wiki.c2.com/?AbcMetric
     - https://en.wikipedia.org/wiki/ABC_Software_Metric
   Enabled: true
   VersionAdded: '0.27'
@@ -3062,7 +3071,8 @@ Naming/MethodParameterName:
 Naming/PredicateMethod:
   Description: 'Checks that predicate methods end with `?` and non-predicate methods do not.'
   Enabled: pending
-  VersionAdded: '<<next>>'
+  VersionAdded: '1.76'
+  VersionChanged: '1.76'
   # In `aggressive` mode, the cop will register an offense for predicate methods that
   #   may return a non-boolean value.
   # In `conservative` mode, the cop will *not* register an offense for predicate methods
@@ -3070,6 +3080,8 @@ Naming/PredicateMethod:
   Mode: conservative
   AllowedMethods:
     - call
+  AllowedPatterns: []
+  AllowBangMethods: false
 
 Naming/PredicatePrefix:
   Description: 'Predicate method names should not be prefixed and end with a `?`.'
@@ -3657,6 +3669,13 @@ Style/CollectionMethods:
     - inject
     - reduce
 
+Style/CollectionQuerying:
+  Description: 'Prefer `Enumerable` predicate methods over expressions with `count`.'
+  StyleGuide: '#collection-querying'
+  Enabled: pending
+  VersionAdded: '1.77'
+  Safe: false
+
 Style/ColonMethodCall:
   Description: 'Do not use :: for method call.'
   StyleGuide: '#double-colons'
@@ -3972,7 +3991,7 @@ Style/EmptyStringInsideInterpolation:
   SupportedStyles:
     - trailing_conditional
     - ternary
-  VersionAdded: '<<next>>'
+  VersionAdded: '1.76'
 
 Style/Encoding:
   Description: 'Use UTF-8 as the source file encoding.'
@@ -4058,6 +4077,9 @@ Style/FetchEnvVar:
   VersionAdded: '1.28'
   # Environment variables to be excluded from the inspection.
   AllowedVars: []
+  # When `true`, autocorrects `ENV["key"]` to `ENV.fetch("key", nil)`.
+  # When `false`, autocorrects `ENV["key"]` to `ENV.fetch("key")`.
+  DefaultToNil: true
 
 Style/FileEmpty:
   Description: >-
@@ -4475,7 +4497,7 @@ Style/ItBlockParameter:
     - always
     - disallow
   VersionAdded: '1.75'
-  VersionChanged: '<<next>>'
+  VersionChanged: '1.76'
 
 Style/KeywordArgumentsMerging:
   Description: >-
@@ -5006,7 +5028,7 @@ Style/OpenStructUse:
                  Avoid using OpenStruct. As of Ruby 3.0, use is officially discouraged due to performance,
                  version compatibility, and potential security issues.
   References:
-    - https://docs.ruby-lang.org/en/3.0.0/OpenStruct.html#class-OpenStruct-label-Caveats
+    - https://docs.ruby-lang.org/en/3.0/OpenStruct.html#class-OpenStruct-label-Caveats
 
   Enabled: pending
   Safe: false
@@ -5192,7 +5214,7 @@ Style/RedundantArrayFlatten:
   Description: 'Checks for redundant calls of `Array#flatten`.'
   Enabled: pending
   Safe: false
-  VersionAdded: '<<next>>'
+  VersionAdded: '1.76'
 
 Style/RedundantAssignment:
   Description: 'Checks for redundant assignment before returning.'

@@ -131,6 +131,14 @@ RSpec.describe RuboCop::Cop::Naming::MethodName, :config do
       end
     end
 
+    %w[Struct ::Struct].each do |class_name|
+      it "does not register an offense for member-less #{class_name}" do
+        expect_no_offenses(<<~RUBY)
+          #{class_name}.new()
+        RUBY
+      end
+    end
+
     context 'when specifying `AllowedPatterns`' do
       let(:cop_config) do
         {
@@ -258,6 +266,33 @@ RSpec.describe RuboCop::Cop::Naming::MethodName, :config do
           expect_no_corrections
         end
       end
+
+      context 'for define_method' do
+        it 'registers an offense when method with forbidden name is defined using `define_method`' do
+          expect_offense(<<~RUBY, identifier: identifier)
+            define_method :%{identifier}
+                          ^^{identifier} `%{identifier}` is forbidden, use another method name instead.
+          RUBY
+        end
+
+        it 'registers an offense when method with forbidden name is defined using `define_singleton_method`' do
+          expect_offense(<<~RUBY, identifier: identifier)
+            define_singleton_method :%{identifier}
+                                    ^^{identifier} `%{identifier}` is forbidden, use another method name instead.
+          RUBY
+        end
+      end
+
+      context 'for `Struct` members' do
+        it 'registers an offense when member with forbidden name is defined' do
+          expect_offense(<<~RUBY, identifier: identifier)
+            Struct.new(:%{identifier})
+                       ^^{identifier} `%{identifier}` is forbidden, use another method name instead.
+          RUBY
+
+          expect_no_corrections
+        end
+      end
     end
   end
 
@@ -302,6 +337,67 @@ RSpec.describe RuboCop::Cop::Naming::MethodName, :config do
 
           expect_no_corrections
         end
+      end
+
+      context 'for define_method' do
+        it 'registers an offense when method with forbidden name is defined using `define_method`' do
+          expect_offense(<<~RUBY, identifier: identifier)
+            define_method :%{identifier}
+                          ^^{identifier} `%{identifier}` is forbidden, use another method name instead.
+          RUBY
+        end
+
+        it 'registers an offense when method with forbidden name is defined using `define_singleton_method`' do
+          expect_offense(<<~RUBY, identifier: identifier)
+            define_singleton_method :%{identifier}
+                                    ^^{identifier} `%{identifier}` is forbidden, use another method name instead.
+          RUBY
+        end
+      end
+
+      context 'for `Struct` members' do
+        it 'registers an offense when member with forbidden name is defined' do
+          expect_offense(<<~RUBY, identifier: identifier)
+            Struct.new(:%{identifier})
+                       ^^{identifier} `%{identifier}` is forbidden, use another method name instead.
+          RUBY
+
+          expect_no_corrections
+        end
+      end
+    end
+  end
+
+  shared_examples 'define_method method call' do |enforced_style, identifier|
+    %i[define_method define_singleton_method].each do |name|
+      it 'registers an offense when method name is passed as a symbol' do
+        expect_offense(<<~RUBY, name: name, enforced_style: enforced_style, identifier: identifier)
+          %{name} :%{identifier} do
+          _{name} ^^{identifier} Use %{enforced_style} for method names.
+          end
+        RUBY
+      end
+
+      it 'registers an offense when method name is passed as a string' do
+        expect_offense(<<~RUBY, name: name, enforced_style: enforced_style, identifier: identifier)
+          %{name} '%{identifier}' do
+          _{name} ^^{identifier}^ Use %{enforced_style} for method names.
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when `define_method` is called without any arguments`' do
+        expect_no_offenses(<<~RUBY)
+          #{name} do
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when `define_method` is called with a variable`' do
+        expect_no_offenses(<<~RUBY)
+          #{name} foo do
+          end
+        RUBY
       end
     end
   end
@@ -375,11 +471,28 @@ RSpec.describe RuboCop::Cop::Naming::MethodName, :config do
       RUBY
     end
 
+    it 'registers an offense for `Struct` camelCase member' do
+      expect_offense(<<~RUBY)
+        Struct.new("camelCase", :snake_case, var, *args, :camelCase, :snake_case_2, "camelCase2")
+                                                         ^^^^^^^^^^ Use snake_case for method names.
+                                                                                    ^^^^^^^^^^^^ Use snake_case for method names.
+      RUBY
+    end
+
+    it 'registers an offense for `::Struct` camelCase member' do
+      expect_offense(<<~RUBY)
+        ::Struct.new("camelCase", :snake_case, var, *args, :camelCase, :snake_case_2, "camelCase2")
+                                                           ^^^^^^^^^^ Use snake_case for method names.
+                                                                                      ^^^^^^^^^^^^ Use snake_case for method names.
+      RUBY
+    end
+
     include_examples 'never accepted',  'snake_case'
     include_examples 'always accepted', 'snake_case'
     include_examples 'multiple attr methods', 'snake_case'
     include_examples 'forbidden identifiers', 'super'
     include_examples 'forbidden patterns', '_v1\z', 'api_v1'
+    include_examples 'define_method method call', 'snake_case', 'fooBar'
   end
 
   context 'when configured for camelCase' do
@@ -453,11 +566,28 @@ RSpec.describe RuboCop::Cop::Naming::MethodName, :config do
       RUBY
     end
 
+    it 'registers an offense for `Struct` camelCase member' do
+      expect_offense(<<~RUBY)
+        Struct.new("foo_bar", var, *args, :snake_case, :camelCase, :snake_case_2, "camelCase2")
+                                          ^^^^^^^^^^^ Use camelCase for method names.
+                                                                   ^^^^^^^^^^^^^ Use camelCase for method names.
+      RUBY
+    end
+
+    it 'registers an offense for `::Struct` camelCase member' do
+      expect_offense(<<~RUBY)
+        ::Struct.new("foo_bar", var, *args, :snake_case, :camelCase, :snake_case_2, "camelCase2")
+                                            ^^^^^^^^^^^ Use camelCase for method names.
+                                                                     ^^^^^^^^^^^^^ Use camelCase for method names.
+      RUBY
+    end
+
     include_examples 'always accepted', 'camelCase'
     include_examples 'never accepted',  'camelCase'
     include_examples 'multiple attr methods', 'camelCase'
     include_examples 'forbidden identifiers', 'super'
     include_examples 'forbidden patterns', '_gen\d+\z', 'user_gen1'
+    include_examples 'define_method method call', 'camelCase', 'foo_bar'
   end
 
   it 'accepts for non-ascii characters' do

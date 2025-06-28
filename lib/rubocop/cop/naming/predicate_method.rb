@@ -6,12 +6,13 @@ module RuboCop
       # Checks that predicate methods end with `?` and non-predicate methods do not.
       #
       # The names of predicate methods (methods that return a boolean value) should end
-      # in a question mark. Methods that don’t return a boolean, shouldn’t
+      # in a question mark. Methods that don't return a boolean, shouldn't
       # end in a question mark.
       #
       # The cop assesses a predicate method as one that returns boolean values. Likewise,
-      # a method that only returns literal values is assessed as non-predicate. The cop does
-      # not make an assessment if the return type is unknown (method calls, variables, etc.).
+      # a method that only returns literal values is assessed as non-predicate. Other predicate
+      # method calls are assumed to return boolean values. The cop does not make an assessment
+      # if the return type is unknown (non-predicate method calls, variables, etc.).
       #
       # NOTE: Operator methods (`def ==`, etc.) are ignored.
       #
@@ -22,7 +23,16 @@ module RuboCop
       #
       # The cop also has `AllowedMethods` configuration in order to prevent the cop from
       # registering an offense from a method name that does not confirm to the naming
-      # guidelines. By default, `call` is allowed.
+      # guidelines. By default, `call` is allowed. The cop also has `AllowedPatterns`
+      # configuration to allow method names by regular expression.
+      #
+      # Although returning a call to another predicate method is treated as a boolean value,
+      # certain method names can be known to not return a boolean, despite ending in a `?`
+      # (for example, `Numeric#nonzero?` returns `self` or `nil`). These methods can be
+      # configured using `NonBooleanPredicates`.
+      #
+      # The cop can furthermore be configured to allow all bang methods (method names
+      # ending with `!`), with `AllowBangMethods: true` (default false).
       #
       # @example Mode: conservative (default)
       #   # bad
@@ -43,6 +53,36 @@ module RuboCop
       #   # good
       #   def foo
       #     5
+      #   end
+      #
+      #   # bad
+      #   def foo
+      #     x == y
+      #   end
+      #
+      #   # good
+      #   def foo?
+      #     x == y
+      #   end
+      #
+      #   # bad
+      #   def foo
+      #     !x
+      #   end
+      #
+      #   # good
+      #   def foo?
+      #     !x
+      #   end
+      #
+      #   # bad - returns the value of another predicate method
+      #   def foo
+      #     bar?
+      #   end
+      #
+      #   # good
+      #   def foo?
+      #     bar?
       #   end
       #
       #   # good - operator method
@@ -73,8 +113,21 @@ module RuboCop
       #     true
       #   end
       #
+      # @example AllowBangMethods: false (default)
+      #   # bad
+      #   def save!
+      #     true
+      #   end
+      #
+      # @example AllowBangMethods: true
+      #   # good
+      #   def save!
+      #     true
+      #   end
+      #
       class PredicateMethod < Base
         include AllowedMethods
+        include AllowedPattern
 
         MSG_PREDICATE = 'Predicate method names should end with `?`.'
         MSG_NON_PREDICATE = 'Non-predicate method names should not end with `?`.'
@@ -97,6 +150,8 @@ module RuboCop
 
         def allowed?(node)
           allowed_method?(node.method_name) ||
+            matches_allowed_pattern?(node.method_name) ||
+            allowed_bang_method?(node) ||
             node.operator_method? ||
             node.body.nil?
         end
@@ -107,12 +162,14 @@ module RuboCop
           return false unless conservative?
 
           return_values.any? do |value|
-            value.type?(:super, :zsuper) || non_comparison_call?(value)
+            value.type?(:super, :zsuper) || unknown_method_call?(value)
           end
         end
 
-        def non_comparison_call?(value)
-          value.call_type? && !value.comparison_method?
+        def unknown_method_call?(value)
+          return false unless value.call_type?
+
+          !method_returning_boolean?(value)
         end
 
         def return_values(node)
@@ -137,7 +194,16 @@ module RuboCop
         end
 
         def boolean_return?(value)
-          value.boolean_type? || (value.call_type? && value.comparison_method?)
+          return true if value.boolean_type?
+
+          method_returning_boolean?(value)
+        end
+
+        def method_returning_boolean?(value)
+          return false unless value.call_type?
+          return false if wayward_predicate?(value.method_name)
+
+          value.comparison_method? || value.predicate_method? || value.negation_method?
         end
 
         def potential_non_predicate?(return_values)
@@ -169,7 +235,7 @@ module RuboCop
 
         def last_value(node)
           value = node.begin_type? ? node.children.last : node
-          value.return_type? ? extract_return_value(value) : value
+          value&.return_type? ? extract_return_value(value) : value
         end
 
         def process_return_values(return_values)
@@ -209,6 +275,27 @@ module RuboCop
 
         def conservative?
           cop_config.fetch('Mode', :conservative).to_sym == :conservative
+        end
+
+        def allowed_bang_method?(node)
+          return false unless allow_bang_methods?
+
+          node.bang_method?
+        end
+
+        def allow_bang_methods?
+          cop_config.fetch('AllowBangMethods', false)
+        end
+
+        # If a method ending in `?` is known to not return a boolean value,
+        # (for example, `Numeric#nonzero?`) it should be treated as a non-boolean
+        # value, despite the method naming.
+        def wayward_predicate?(name)
+          wayward_predicates.include?(name.to_s)
+        end
+
+        def wayward_predicates
+          Array(cop_config.fetch('WaywardPredicates', []))
         end
       end
     end

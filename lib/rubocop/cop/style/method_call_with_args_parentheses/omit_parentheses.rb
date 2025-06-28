@@ -167,7 +167,7 @@ module RuboCop
           def call_in_match_pattern?(node)
             return false unless (parent = node.parent)
 
-            parent.type?(:match_pattern, :match_pattern_p)
+            parent.any_match_pattern_type?
           end
 
           def hash_literal_in_arguments?(node)
@@ -251,7 +251,7 @@ module RuboCop
             return false unless (last_argument = node.last_argument)
             return true if last_argument.forwarded_restarg_type?
 
-            last_argument.hash_type? && last_argument.children.first&.forwarded_kwrestarg_type?
+            last_argument.hash_type? && last_argument.children.any?(&:forwarded_kwrestarg_type?)
           end
         end
         # rubocop:enable Metrics/ModuleLength, Metrics/CyclomaticComplexity

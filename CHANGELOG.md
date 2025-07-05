@@ -11,6 +11,88 @@
 
 ## master (unreleased)
 
+## 1.77.0 (2025-06-20)
+
+### New features
+
+* [#14223](https://github.com/rubocop/rubocop/pull/14223): Add new `Gemspec/AttributeAssignment` cop. ([@viralpraxis][])
+* [#14128](https://github.com/rubocop/rubocop/issues/14128): Allow long fully-qualified namespace strings to exceed max length. ([@niranjan-patil][])
+* [#14288](https://github.com/rubocop/rubocop/pull/14288): Add new cop `Style/CollectionQuerying`. ([@lovro-bikic][])
+* [#14165](https://github.com/rubocop/rubocop/issues/14165): Add new `DefaultToNil` option to `Style/FetchEnvVar` cop. ([@Yuhi-Sato][])
+* [#14314](https://github.com/rubocop/rubocop/pull/14314): Enhance `Gemspec/RequireMFA` cop autocorrect to insert MFA directive after last `metadata` assignment. ([@viralpraxis][])
+* [#14159](https://github.com/rubocop/rubocop/pull/14159): Enhance `Layout/SpaceInsideArrayLiteralBrackets` cop to analyze nested constant patterns. ([@viralpraxis][])
+
+### Bug fixes
+
+* [#14306](https://github.com/rubocop/rubocop/issues/14306): Fix an error for `Style/HashConversion` when using nested `Hash[]`. ([@koic][])
+* [#14298](https://github.com/rubocop/rubocop/issues/14298): Fix an error for `Style/SoleNestedConditional` when autocorrecting nested if/unless/if. ([@ssagara00][])
+* [#14313](https://github.com/rubocop/rubocop/issues/14313): Fix a false positive for `Layout/SpaceBeforeBrackets` when call desugared `Hash#[]` to lvar receiver with a space around the dot. ([@koic][])
+* [#14292](https://github.com/rubocop/rubocop/issues/14292): Fix false positives for `Style/RedundantParentheses` when assigning a parenthesized one-line `in` pattern matching. ([@koic][])
+* [#14296](https://github.com/rubocop/rubocop/issues/14296): Fix false positives for `Style/RedundantSelf` when receiver and lvalue have the same name in or-assignment. ([@koic][])
+* [#14303](https://github.com/rubocop/rubocop/pull/14303): Fix `Lint/SelfAssignment` to allow inline RBS comments. ([@Morriar][])
+* [#14307](https://github.com/rubocop/rubocop/issues/14307): Fix `Style/MethodCallWithArgsParentheses` false positive on forwarded keyword argument with additional arguments. ([@viralpraxis][])
+* [#14301](https://github.com/rubocop/rubocop/issues/14301): Fix autocorrection syntax error for multiline expressions in `Style/RedundantParentheses`. ([@lovro-bikic][])
+
+### Changes
+
+* [#14295](https://github.com/rubocop/rubocop/pull/14295): Update `Naming/PredicateMethod` to consider negation (`!`/`not`) as boolean values. ([@dvandersluis][])
+* [#14255](https://github.com/rubocop/rubocop/issues/14255): Update `Naming/PredicateMethod` to treat returned predicate method calls as boolean values. ([@dvandersluis][])
+
+## 1.76.2 (2025-06-17)
+
+### Bug fixes
+
+* [#14273](https://github.com/rubocop/rubocop/issues/14273): Fix an error for `Lint/EmptyInterpolation` when using a boolean literal inside interpolation. ([@koic][])
+* [#14260](https://github.com/rubocop/rubocop/issues/14260): Fix an error for `Lint/UselessDefaultValueArgument` when `fetch` call without a receiver. ([@koic][])
+* [#14267](https://github.com/rubocop/rubocop/pull/14267): Fix an error for `Style/ConditionalAssignment` cop when using one-line branches. ([@viralpraxis][])
+* [#14275](https://github.com/rubocop/rubocop/issues/14275): Fix false positives for `Style/RedundantParentheses` when using parenthesized one-line pattern matching in endless method definition. ([@koic][])
+* [#14269](https://github.com/rubocop/rubocop/issues/14269): Fix false positives for `Style/RedundantSelf` when local variable assignment name is used in nested `if`. ([@koic][])
+* [#14286](https://github.com/rubocop/rubocop/issues/14286): Fix incorrect autocorrect for `Lint/SafeNavigationChain` when a safe navigation is used on the left-hand side of a `-` operator when inside an array. ([@koic][])
+
+### Changes
+
+* [#14232](https://github.com/rubocop/rubocop/issues/14232): Add `AllowedPatterns` and `AllowBangMethods` configuration to `Naming/PredicateMethod`. ([@dvandersluis][])
+* [#14268](https://github.com/rubocop/rubocop/pull/14268): Register operator expression range boundaries as offenses in `Lint/AmbiguousRange`. ([@lovro-bikic][])
+* [#14264](https://github.com/rubocop/rubocop/pull/14264): Offend access modifiers used on top-level in `Lint/UselessAccessModifier`. ([@lovro-bikic][])
+* [#14278](https://github.com/rubocop/rubocop/pull/14278): Register conditions wrapped in parentheses as offenses in `Style/MinMaxComparison`. ([@lovro-bikic][])
+
+## 1.76.1 (2025-06-09)
+
+### Bug fixes
+
+* [#14245](https://github.com/rubocop/rubocop/pull/14245): Fix an error for `Lint/EmptyInterpolation` when using primitives in interpolation. ([@ka8725][])
+* [#14233](https://github.com/rubocop/rubocop/issues/14233): Fix an error for `Style/SafeNavigation` when using ternary expression with index access call. ([@koic][])
+* [#14236](https://github.com/rubocop/rubocop/issues/14236): Fix an error for `Style/SafeNavigation` when using ternary expression with operator method call. ([@koic][])
+* [#14249](https://github.com/rubocop/rubocop/issues/14249): Fix false positives for `Style/RedundantArrayFlatten` when `Array#join` is used with an argument other than the default `nil`. ([@koic][])
+* [#14239](https://github.com/rubocop/rubocop/issues/14239): Fix false positives for `Style/RedundantParentheses` when using one-line `in` pattern matching in operator. ([@koic][])
+* [#14240](https://github.com/rubocop/rubocop/issues/14240): Fix `Naming/PredicateMethod` cop error on empty parentheses method body. ([@viralpraxis][])
+* [#14235](https://github.com/rubocop/rubocop/pull/14235): Fix `Style/SafeNavigation` cop error on indexed assignment in ternary expression. ([@viralpraxis][])
+* [#14247](https://github.com/rubocop/rubocop/pull/14247): Fix `Style/SafeNavigation` invalid autocorrection on double colon method call. ([@viralpraxis][])
+
+## 1.76.0 (2025-06-04)
+
+### New features
+
+* [#12360](https://github.com/rubocop/rubocop/issues/12360): Add new `Naming/PredicateMethod` cop to check that predicate methods end with `?` and non-predicate methods do not. ([@dvandersluis][])
+* [#13121](https://github.com/rubocop/rubocop/issues/13121): Add new `Style/EmptyStringInsideInterpolation` cop. ([@zopolis4][])
+* [#14091](https://github.com/rubocop/rubocop/pull/14091): Add new cop `Style/RedundantArrayFlatten`. ([@lovro-bikic][])
+* [#14184](https://github.com/rubocop/rubocop/pull/14184): Add new cop `Lint/UselessOr`. ([@lovro-bikic][])
+* [#14221](https://github.com/rubocop/rubocop/pull/14221): Enhance `Gemspec` department cops to detect offenses if specification variable is `it` or a numbered parameter. ([@viralpraxis][])
+* [#14166](https://github.com/rubocop/rubocop/pull/14166): Add new cop `Lint/UselessDefaultValueArgument`. ([@lovro-bikic][])
+
+### Bug fixes
+
+* [#14228](https://github.com/rubocop/rubocop/issues/14228): Fix a false positive for `Style/RedundantParentheses` when using a one-line `rescue` expression as a method argument. ([@koic][])
+* [#14224](https://github.com/rubocop/rubocop/pull/14224): Fix false negatives for `Style/RedundantParentheses` when using one-line pattern matching. ([@koic][])
+* [#14205](https://github.com/rubocop/rubocop/issues/14205): False negatives in `Style/SafeNavigation` when a ternary expression is used in a method argument. ([@steiley][])
+* [#14226](https://github.com/rubocop/rubocop/pull/14226): Fix `Lint/LiteralAsCondition` autocorrect when branches of a condition have comments. ([@zopolis4][])
+
+### Changes
+
+* [#14066](https://github.com/rubocop/rubocop/pull/14066): Add `EnforcedStyle: allow_single_line` as the default to `Style/ItBlockParameter`. ([@koic][])
+* [#13788](https://github.com/rubocop/rubocop/pull/13788): Disable `Lint/ShadowingOuterLocalVariable` by default. ([@nekketsuuu][])
+* [#14215](https://github.com/rubocop/rubocop/pull/14215): Recognize inequation (`!=`) in `Lint/IdentityComparison`. ([@lovro-bikic][])
+
 ## 1.75.8 (2025-05-28)
 
 ### Bug fixes
@@ -4108,3 +4190,8 @@
 [@sferik]: https://github.com/sferik
 [@Morriar]: https://github.com/Morriar
 [@daisuke]: https://github.com/daisuke
+[@steiley]: https://github.com/steiley
+[@ka8725]: https://github.com/ka8725
+[@ssagara00]: https://github.com/ssagara00
+[@niranjan-patil]: https://github.com/niranjan-patil
+[@Yuhi-Sato]: https://github.com/Yuhi-Sato

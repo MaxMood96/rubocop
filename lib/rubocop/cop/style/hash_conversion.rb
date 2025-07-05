@@ -44,17 +44,17 @@ module RuboCop
       class HashConversion < Base
         extend AutoCorrector
 
-        MSG_TO_H = 'Prefer ary.to_h to Hash[ary].'
-        MSG_LITERAL_MULTI_ARG = 'Prefer literal hash to Hash[arg1, arg2, ...].'
-        MSG_LITERAL_HASH_ARG = 'Prefer literal hash to Hash[key: value, ...].'
-        MSG_SPLAT = 'Prefer array_of_pairs.to_h to Hash[*array].'
+        MSG_TO_H = 'Prefer `ary.to_h` to `Hash[ary]`.'
+        MSG_LITERAL_MULTI_ARG = 'Prefer literal hash to `Hash[arg1, arg2, ...]`.'
+        MSG_LITERAL_HASH_ARG = 'Prefer literal hash to `Hash[key: value, ...]`.'
+        MSG_SPLAT = 'Prefer `array_of_pairs.to_h` to `Hash[*array]`.'
         RESTRICT_ON_SEND = %i[[]].freeze
 
         # @!method hash_from_array?(node)
         def_node_matcher :hash_from_array?, '(send (const {nil? cbase} :Hash) :[] ...)'
 
         def on_send(node)
-          return unless hash_from_array?(node)
+          return if part_of_ignored_node?(node) || !hash_from_array?(node)
 
           # There are several cases:
           # If there is one argument:
@@ -63,7 +63,8 @@ module RuboCop
           # If there is 0 or 2+ arguments:
           #   Hash[a1, a2, a3, a4] => {a1 => a2, a3 => a4}
           #   ...but don't suggest correction if there is odd number of them (it is a bug)
-          node.arguments.count == 1 ? single_argument(node) : multi_argument(node)
+          node.arguments.one? ? single_argument(node) : multi_argument(node)
+          ignore_node(node)
         end
 
         private
@@ -111,7 +112,12 @@ module RuboCop
         end
 
         def requires_parens?(node)
-          (node.call_type? && node.arguments.any? && !node.parenthesized?) || node.operator_keyword?
+          if node.call_type?
+            return false if node.method?(:[])
+            return true if node.arguments.any? && !node.parenthesized?
+          end
+
+          node.operator_keyword?
         end
 
         def multi_argument(node)

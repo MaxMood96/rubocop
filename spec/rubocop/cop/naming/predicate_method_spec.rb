@@ -2,10 +2,16 @@
 
 RSpec.describe RuboCop::Cop::Naming::PredicateMethod, :config do
   let(:allowed_methods) { [] }
+  let(:allowed_patterns) { [] }
+  let(:allow_bang_methods) { false }
+  let(:wayward_predicates) { [] }
   let(:cop_config) do
     {
       'Mode' => mode,
-      'AllowedMethods' => allowed_methods
+      'AllowedMethods' => allowed_methods,
+      'AllowedPatterns' => allowed_patterns,
+      'AllowBangMethods' => allow_bang_methods,
+      'WaywardPredicates' => wayward_predicates
     }
   end
 
@@ -254,6 +260,22 @@ RSpec.describe RuboCop::Cop::Naming::PredicateMethod, :config do
       RUBY
     end
 
+    it 'does not register an offense for a `def` with empty parentheses body' do
+      expect_no_offenses(<<~RUBY)
+        def foo
+          ()
+        end
+      RUBY
+    end
+
+    it 'does not register an offense for a `defs` with empty parentheses body' do
+      expect_no_offenses(<<~RUBY)
+        def self.foo
+          ()
+        end
+      RUBY
+    end
+
     context 'bare return' do
       it_behaves_like 'non-predicate', '', implicit: false
 
@@ -281,6 +303,13 @@ RSpec.describe RuboCop::Cop::Naming::PredicateMethod, :config do
         it_behaves_like 'predicate', 'a > b || c < d'
         it_behaves_like 'predicate', 'a > b || c < d || e != f'
         it_behaves_like 'predicate', 'a > b && c < d || e != f'
+      end
+    end
+
+    context 'methods returning negations' do
+      ['5', 'true', 'false', 'nil', '[]', 'a', 'a?', '(a == b)'].each do |value|
+        it_behaves_like 'predicate', "!#{value}"
+        it_behaves_like 'predicate', "(not #{value})"
       end
     end
 
@@ -445,7 +474,21 @@ RSpec.describe RuboCop::Cop::Naming::PredicateMethod, :config do
       it_behaves_like 'acceptable', 'bar'
       it_behaves_like 'acceptable', 'bar()'
       it_behaves_like 'acceptable', 'bar(baz)'
-      it_behaves_like 'acceptable', 'bar?'
+    end
+
+    context 'methods returning other predicates' do
+      it_behaves_like 'predicate', 'bar?'
+      it_behaves_like 'predicate', 'bar?()'
+      it_behaves_like 'predicate', 'bar?(baz)'
+      it_behaves_like 'predicate', 'bar.baz?'
+
+      it_behaves_like 'predicate', <<~RUBY, explicit: false
+        if bar
+          baz?
+        else
+          false
+        end
+      RUBY
     end
 
     context 'variables' do
@@ -496,6 +539,58 @@ RSpec.describe RuboCop::Cop::Naming::PredicateMethod, :config do
           end
         RUBY
       end
+    end
+
+    context 'with AllowedPatterns' do
+      let(:allowed_patterns) { %w[\Afoo] }
+
+      it 'does not register an offense for a method name that matches the pattern' do
+        expect_no_offenses(<<~RUBY)
+          def foo?
+            'foo'
+          end
+        RUBY
+      end
+
+      it 'registers an offense for a method name that does not match the pattern' do
+        expect_offense(<<~RUBY)
+          def barfoo?
+              ^^^^^^^ Non-predicate method names should not end with `?`.
+            'bar'
+          end
+        RUBY
+      end
+    end
+
+    context 'with AllowBangMethods: true' do
+      let(:allow_bang_methods) { true }
+
+      it 'does not register an offense for a bang method that returns a boolean' do
+        expect_no_offenses(<<~RUBY)
+          def save!
+            true
+          end
+        RUBY
+      end
+    end
+
+    context 'with AllowBangMethods: false' do
+      let(:allow_bang_methods) { false }
+
+      it 'registers an offense for a bang method that returns a boolean' do
+        expect_offense(<<~RUBY)
+          def save!
+              ^^^^^ Predicate method names should end with `?`.
+            true
+          end
+        RUBY
+      end
+    end
+
+    context 'with WaywardPredicates' do
+      let(:wayward_predicates) { %w[nonzero?] }
+
+      it_behaves_like 'acceptable', 'nonzero?'
     end
   end
 
@@ -565,6 +660,11 @@ RSpec.describe RuboCop::Cop::Naming::PredicateMethod, :config do
     end
 
     context 'method calls' do
+      it_behaves_like 'acceptable', <<~RUBY, explicit: false
+        return if something
+        true
+      RUBY
+
       it_behaves_like 'acceptable', <<~RUBY, explicit: false
         return if something
         bar?
@@ -637,6 +737,11 @@ RSpec.describe RuboCop::Cop::Naming::PredicateMethod, :config do
     end
 
     context 'method calls' do
+      it_behaves_like 'non-predicate', <<~RUBY, explicit: false
+        return if something
+        true
+      RUBY
+
       it_behaves_like 'non-predicate', <<~RUBY, explicit: false
         return if something
         bar?

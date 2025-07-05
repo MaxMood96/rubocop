@@ -123,7 +123,9 @@ module RuboCop
         # rubocop:enable Metrics/AbcSize
 
         def on_case(case_node)
-          if case_node.condition
+          if (cond = case_node.condition)
+            return if !cond.falsey_literal? && !cond.truthy_literal?
+
             check_case(case_node)
           else
             case_node.when_branches.each do |when_node|
@@ -228,7 +230,7 @@ module RuboCop
           )
         end
 
-        def condition_evaluation(node, cond)
+        def condition_evaluation?(node, cond)
           if node.unless?
             cond.falsey_literal?
           else
@@ -238,7 +240,7 @@ module RuboCop
 
         # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def correct_if_node(node, cond)
-          result = condition_evaluation(node, cond)
+          result = condition_evaluation?(node, cond)
 
           new_node = if node.elsif? && result
                        "else\n  #{range_with_comments(node.if_branch).source}"

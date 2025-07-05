@@ -132,12 +132,10 @@ module RuboCop
         end
 
         def pattern_matching_nodes(condition)
-          if condition.type?(:match_pattern, :match_pattern_p)
+          if condition.any_match_pattern_type?
             [condition]
           else
-            condition.each_descendant.select do |node|
-              node.type?(:match_pattern, :match_pattern_p)
-            end
+            condition.each_descendant.select(&:any_match_pattern_type?)
           end
         end
 
@@ -225,8 +223,17 @@ module RuboCop
 
         def too_long_line_based_on_allow_uri?(line)
           if allow_uri?
-            uri_range = find_excessive_uri_range(line)
-            return false if uri_range && allowed_uri_position?(line, uri_range)
+            uri_range = find_excessive_range(line, :uri)
+            return false if uri_range && allowed_position?(line, uri_range)
+          end
+
+          true
+        end
+
+        def too_long_line_based_on_allow_qualified_name?(line)
+          if allow_qualified_name?
+            namespace_range = find_excessive_range(line, :namespace)
+            return false if namespace_range && allowed_position?(line, namespace_range)
           end
 
           true

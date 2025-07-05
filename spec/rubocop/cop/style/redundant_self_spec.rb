@@ -16,6 +16,14 @@ RSpec.describe RuboCop::Cop::Style::RedundantSelf, :config do
     expect_no_offenses('a = self.a')
   end
 
+  it 'does not report an offense when receiver and lvalue have the same name in or-assignment' do
+    expect_no_offenses('foo ||= self.foo')
+  end
+
+  it 'does not report an offense when receiver and lvalue have the same name in and-assignment' do
+    expect_no_offenses('foo &&= self.foo')
+  end
+
   it 'accepts when nested receiver and lvalue have the same name' do
     expect_no_offenses('a = self.a || b || c')
   end
@@ -30,6 +38,22 @@ RSpec.describe RuboCop::Cop::Style::RedundantSelf, :config do
 
   it 'does not report an offense when masgn name is used in `if`' do
     expect_no_offenses('a, b = self.a if self.a')
+  end
+
+  it 'does not report an offense when lvasgn name is used in nested `if`' do
+    expect_no_offenses(<<~RUBY)
+      if self.a
+        a = self.a
+      end if self.a
+    RUBY
+  end
+
+  it 'does not report an offense when masgn name is used in nested `if`' do
+    expect_no_offenses(<<~RUBY)
+      if self.a
+        a, b = self.a
+      end if self.a
+    RUBY
   end
 
   it 'does not report an offense when lvasgn name is used in `unless`' do

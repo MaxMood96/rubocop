@@ -8,7 +8,7 @@ RSpec.describe RuboCop::Cop::Style::ItBlockParameter, :config do
       it 'registers an offense when using multiline `it` parameters', unsupported_on: :parser do
         expect_offense(<<~RUBY)
           block do
-          ^^^^^^^^ Avoid using numbered parameters for multi-line blocks.
+          ^^^^^^^^ Avoid using `it` block parameter for multi-line blocks.
             do_something(it)
           end
         RUBY
@@ -99,6 +99,17 @@ RSpec.describe RuboCop::Cop::Style::ItBlockParameter, :config do
             foo(it)
             bar(it)
           end
+        RUBY
+      end
+
+      it 'registers an offense when using a single numbered parameter after multiple numbered parameters in a method chain' do
+        expect_offense(<<~RUBY)
+          foo { bar(_1, _2) }.baz { qux(_1) }
+                                        ^^ Use `it` block parameter.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          foo { bar(_1, _2) }.baz { qux(it) }
         RUBY
       end
 

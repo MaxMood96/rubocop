@@ -282,9 +282,15 @@ describe RuboCop::Cop::Style::SimplifyNotEmptyWithAny, :config do
 end
 ----
 
-If your code has variables of different lengths, you can use `%{foo}`,
-`^{foo}`, and `_{foo}` to format your template; you can also abbreviate
-offense messages with `[...]`:
+If your code has variables of different lengths, you can use the following
+markers to format your template by passing the variables as a keyword
+arguments:
+
+- `%{foo}`: Interpolates `foo`
+- `^{foo}`: Inserts `'^' * foo.size` for dynamic offense range length
+- `_{foo}`: Inserts `' ' * foo.size` for dynamic offense range indentation
+
+You can also abbreviate offense messages with `[...]`.
 
 [source,ruby]
 ----
@@ -375,9 +381,9 @@ This can be implemented using the `IgnoredNode` module:
  end
 ----
 
-This works because the correcting a file is implemented by repeating investigation and correction until the file no longer requires correction, meaning all nested nodes will eventually be processed.
+This works because file correction is implemented by repeating investigation and correction until the file no longer requires correction, meaning all nested nodes will eventually be processed.
 
-Note that `expect_correction` in `Cop` specs only asserts the result after one pass.
+Note that `expect_correction` in `Cop` specs asserts the result after all passes.
 
 === Limit by Ruby or Gem versions
 
@@ -440,7 +446,7 @@ class MyCop < Base
   requires_gem "my-gem"
 
   def on_send(node)
-    if target_gem_version("my-gem) < "2.0"
+    if target_gem_version("my-gem") < "2.0"
       # ...
     else
       # ...
